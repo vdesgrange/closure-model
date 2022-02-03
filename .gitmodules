@@ -1,0 +1,3 @@
+[submodule "thesis/closure-model-thesis"]
+	path = thesis/closure-model-thesis
+	url = https://github.com/vdesgrange/closure-model-thesis
