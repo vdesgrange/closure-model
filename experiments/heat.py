@@ -1,4 +1,3 @@
-# Import packages
 import numpy as np
 
 
@@ -116,7 +115,8 @@ def get_heat_fe(t_max, t_min, x_max, x_min, t_n, x_n):
         tmp = - dt * np.matmul(A, c[:, t])
         c[:, t+1] = np.linalg.solve(B, tmp) + c[:,t]
 
-    return c.T
+    return c.T, None
+
 
 def get_heat_fd(t_max, t_min, x_max, x_min, t_n, x_n):
     """
@@ -128,6 +128,9 @@ def get_heat_fd(t_max, t_min, x_max, x_min, t_n, x_n):
     @param t_n : number of discrete value on t-axis
     @param x_n : number of discrete value on x-axis
     """
+    dt = (t_max - t_min) / t_n
+    dx = (x_max - x_min) / x_n
+
     ua, _ = get_heat(t_max, t_min, x_max, x_min, t_n, x_n)
     u = np.zeros((t_n, x_n + 1))
     u[0, 1:] = ua[0,:]
@@ -136,9 +139,11 @@ def get_heat_fd(t_max, t_min, x_max, x_min, t_n, x_n):
         for k in range(1, x_n):
             u[i][k] = (u[i-1][k-1] - 2 * u[i-1][k] + u[i-1][k+1]) * dt / (dx**2) + u[i-1][k]
 
-    return u
+    return u, None
+
 
 if __name__ == '__main__':
     u_true, cn = get_heat(0.2, 0., 1., 0., 20, 50, True)
     g_u_true = get_heat_grad_t(0.2, 0., 1., 0., 20, 50, cn)
-    u_fe = get_heat_fe(0.0001, 0.0, 0.5, 0.0, 20, 50)
+    u_fe, _ = get_heat_fe(0.0001, 0.0, 0.5, 0.0, 20, 50)
+    u_fd, _ = get_heat_fd(0.0001, 0.0, 0.5, 0.0, 20, 50)
