@@ -1,0 +1,66 @@
+# Import packages
+import numpy as np
+import pylab as plt
+import matplotlib.pyplot as plt
+from scipy.sparse import coo_matrix
+
+def simple_plotter(ks, title='Simple plot', L=1.0):
+    """
+    Graphic tool to plot simple values
+    """
+    fig, ax = plt.subplots()
+    fig.tight_layout()
+    plt.title(title)
+
+    for k in ks:
+        x = np.linspace(0, L, len(k))
+        ax.plot(x, k)
+
+    plt.show()
+
+
+def show_state(a, title):
+    """
+    Graphic tool to show an image.
+    This function was implemented to visualize unordered scatter data 
+    as this function isn't optimized in matplotlib.
+    """
+    _, axes = plt.subplots(1, 1, figsize=(16, 5))
+    im = axes.imshow(a, origin='upper', cmap='inferno')
+    plt.colorbar(im);
+    plt.xlabel('x');
+    plt.ylabel('t');
+    plt.title(title)
+
+
+def matrix_plotter(M):
+    """
+    Graphic tool to plot the matrix M
+    """
+    fig, ax = plt.subplots(dpi=150)
+    ax.spy(M)
+
+    if (type(M) is not coo_matrix):
+        for i in range(M.shape[0]):
+            for j in range(M.shape[1]):
+                if (M[i][j]): 
+                    color = 'w' if M[i][j] != -2 else 'k'
+                    ax.text(i, j, str(int(M[i][j])), va='center', ha='center', color=color)
+
+    plt.show()
+
+
+def domain_curve(k, v, L):
+    """
+    Graphic tool to plot eigenvector v in 1-dimension domain.
+    :param k: eigenvalue associated to the eigenvector
+    :param v: eigenvector
+    :param L: number of row
+    :param title: plot title
+    """
+    fig, ax = plt.subplots()
+    fig.tight_layout()
+    frequency = np.sqrt(abs(np.real(k)))
+    plt.title(r'Eigenmode for $\lambda$={:2f}'.format(frequency))
+    ax.plot(v, 'bo')
+    plt.show()
