@@ -2,6 +2,7 @@
 import numpy as np
 import pylab as plt
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 from scipy.sparse import coo_matrix
 
 def simple_plotter(ks, title='Simple plot', L=1.0):
@@ -17,6 +18,29 @@ def simple_plotter(ks, title='Simple plot', L=1.0):
         ax.plot(x, k)
 
     plt.show()
+
+
+def animate_plot(u, x):
+    fig, ax = plt.subplots(dpi=100)
+    xdata, ydata = x, u[0,:]
+    ln, = ax.plot(xdata, ydata)
+
+    def init():
+        u_max, u_min = np.max(u), np.min(u)
+        x_min, x_max = x[0], x[-1]
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(u_min, u_max)
+        return ln,
+
+    def update(n):
+        xdata = x
+        ydata = u[n, :]
+        ln.set_data(xdata, ydata)
+        return ln,
+
+    frames = np.arange(0, u.shape[0], 1)
+    ani = FuncAnimation(fig, update, frames=frames, init_func=init, interval=50, blit=True, repeat=True)
+    return ani
 
 
 def show_state(a, title):
