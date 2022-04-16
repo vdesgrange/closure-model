@@ -43,17 +43,17 @@ def animate_plot(u, x):
     return ani
 
 
-def show_state(a, title):
+def show_state(a, title, x='x', y='t'):
     """
     Graphic tool to show an image.
-    This function was implemented to visualize unordered scatter data 
+    This function was implemented to visualize unordered scatter data
     as this function isn't optimized in matplotlib.
     """
-    _, axes = plt.subplots(1, 1, figsize=(16, 5))
+    _, axes = plt.subplots(1, 1, figsize=(16, 5), dpi=200)
     im = axes.imshow(a, origin='upper', cmap='inferno')
     plt.colorbar(im);
-    plt.xlabel('x');
-    plt.ylabel('t');
+    plt.xlabel(x);
+    plt.ylabel(y);
     plt.title(title)
 
 
