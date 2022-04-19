@@ -24,7 +24,7 @@ def get_burgers(t_max, t_min, x_max, x_min, t_n, x_n, nu):
     return analytical_burgers_1d(t_axis[:, None], x_axis[None, :], nu)
 
 
-def get_burgers_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, func):
+def get_burgers_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0):
     """
     Compute value of 1D viscous burgers equation for each time step.
     :param u: 2D array with initial values set
@@ -37,7 +37,8 @@ def get_burgers_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, func):
     dt = (t_max - t_min) / t_n
     dx = (x_max - x_min) / x_n
 
-    u = func(t_max, t_min, x_max, x_min, t_n, x_n, nu)
+    # u = func(t_max, t_min, x_max, x_min, t_n, x_n, nu)
+    u = u0
 
     for i in range(1, t_n):
         a = nu * (u[i-1, 2:] - 2 * u[i-1, 1:-1] + u[i-1, 0:-2]) / (dx**2)
@@ -54,8 +55,6 @@ def set_initial_condition(t_max, t_min, x_max, x_min, t_n, x_n, nu):
     :param S: time discretization size
     :param func: initial function of x at t=0
     """
-    dt = (t_max - t_min) / t_n
-    dx = (x_max - x_min) / x_n
     u = np.zeros((t_n, x_n))
 
     u_true = get_burgers(t_max, t_min, x_max, x_min, t_n, x_n - 2, nu)
