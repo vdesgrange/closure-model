@@ -1,5 +1,6 @@
 import numpy as np
 from burgers import analytical_burgers_1d
+from heat import analytical_heat_1d
 
 def gaussian_init(t, x):
     u = np.zeros((t.shape[0], x.shape[0] + 2))
@@ -9,7 +10,7 @@ def gaussian_init(t, x):
 
     return u
 
-def analytical_init(t, x, nu):
+def burgers_analytical_init(t, x, nu):
     u = np.zeros((t.shape[0], x.shape[0] + 2))
 
     u_true = analytical_burgers_1d(t[:, None], x[None, :], nu)
@@ -33,7 +34,6 @@ def random_init(t, x):
 
     return u
 
-
 def high_dim_random_init(t, x):
     """
     High-dimensional random initial conditions
@@ -50,3 +50,12 @@ def high_dim_random_init(t, x):
     u[:, -1] = 0
 
     return u
+
+def heat_analytical_init(t, x, rand=False):
+    u0 = np.zeros((t.shape[0], x.shape[0] + 2))
+    u, _ = analytical_heat_1d(t[:, None], x[None, :], 50, rand)
+    u0[0, 1:-1] = u[0, :]
+    u0[:, 0] = 0
+    u0[:, -1] = 0
+
+    return u0

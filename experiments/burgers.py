@@ -37,7 +37,6 @@ def get_burgers_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0):
     dt = (t_max - t_min) / t_n
     dx = (x_max - x_min) / x_n
 
-    # u = func(t_max, t_min, x_max, x_min, t_n, x_n, nu)
     u = u0
 
     for i in range(1, t_n):
