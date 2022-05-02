@@ -118,7 +118,7 @@ def get_heat_fe(t_max, t_min, x_max, x_min, t_n, x_n):
     return c.T, None
 
 
-def get_heat_fd(t_max, t_min, x_max, x_min, t_n, x_n, u0=None):
+def get_heat_fd(dt, dx, t_n, x_n, u0=None):
     """
     Heat solution with finite difference method
     @param t_max : t range max value
@@ -128,20 +128,14 @@ def get_heat_fd(t_max, t_min, x_max, x_min, t_n, x_n, u0=None):
     @param t_n : number of discrete value on t-axis
     @param x_n : number of discrete value on x-axis
     """
-    dt = (t_max - t_min) / t_n
-    dx = (x_max - x_min) / x_n
-
-    # ua, _ = get_heat(t_max, t_min, x_max, x_min, t_n, x_n)
-    # u = np.zeros((t_n, x_n + 1))
-    # u[0, 1:] = ua[0,:]
     u = u0
 
     for i in range(1, t_n):
         u[i, 1:-1] = u[i-1, 1:-1] + dt * (u[i-1, 2:] - 2 * u[i-1, 1:-1] + u[i-1][0:-2]) / (dx**2)
-        #for k in range(1, x_n):
-        #    u[i][k] = (u[i-1][k-1] - 2 * u[i-1][k] + u[i-1][k+1]) * dt / (dx**2) + u[i-1][k]
 
     return u, None
+
+
 
 
 if __name__ == '__main__':

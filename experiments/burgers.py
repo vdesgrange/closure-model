@@ -41,7 +41,7 @@ def get_burgers_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0):
         u[i, 1:-1] = u[i-1, 1:-1] + dt * (a - b)
     return u
 
-def get_burgers_cons_df(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0):
+def get_burgers_cons_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0):
     """
     Compute value of 1D conservative viscous burgers equation for each time step.
     :param nu: viscosity parameter
