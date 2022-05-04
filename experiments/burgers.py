@@ -41,6 +41,7 @@ def get_burgers_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0):
         u[i, 1:-1] = u[i-1, 1:-1] + dt * (a - b)
     return u
 
+
 def get_burgers_cons_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0):
     """
     Compute value of 1D conservative viscous burgers equation for each time step.
@@ -59,8 +60,8 @@ def get_burgers_cons_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0):
     
     return u
 
-def get_D(X, s):
 
+def get_D(X, s):
     d = np.zeros((X, X))
     for i in range(X):
         d[i][i] = 1 - s
@@ -70,6 +71,7 @@ def get_D(X, s):
         d[i+1][i] = s / 2
     
     return d
+
 
 def get_M(X, u, dt, dx, nu):
     M = np.zeros((X, X))
@@ -84,6 +86,7 @@ def get_M(X, u, dt, dx, nu):
         M[i][i+1] = dt / (4 * dx) * u[i+1] - s / 2
     
     return M
+
 
 def get_burgers_nicolson(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0):
     """

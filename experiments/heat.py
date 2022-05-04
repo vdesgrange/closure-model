@@ -1,25 +1,7 @@
 import numpy as np
+from initial_functions import random_init, analytical_heat_1d
+from graphic_tools import show_state
 
-
-def analytical_heat_1d(t, x, n_max: int=1, rand=False):
-    """
-    Analytical solution to 1D heat equation.
-    Return solution for a single tuple (t, x)
-    @param t : time value
-    @param x : space value
-    @param n_max : constant used for computation of heat solution
-    @param rand : If true generates, a random vector of constants c to compute heat solution. Else, set all c values at 1.
-    @return u : solution
-    @return cn : vector of constant c used for computation.
-    """
-    L = 1.
-
-    cn = np.ones(n_max)
-    if rand:
-        cn = np.random.rand(n_max)
-
-    u = np.sum([cn[n] * np.exp((-np.pi**2 * n**2 * t) / L) * np.sin((n * np.pi * x) / L) for n in range(n_max)], axis=0)
-    return u, cn
 
 
 def get_heat(t_max, t_min, x_max, x_min, t_n, x_n, rand=False):
@@ -128,7 +110,7 @@ def get_heat_fd(dt, dx, t_n, x_n, u0=None):
     @param t_n : number of discrete value on t-axis
     @param x_n : number of discrete value on x-axis
     """
-    u = u0
+    u = np.copy(u0)
 
     for i in range(1, t_n):
         u[i, 1:-1] = u[i-1, 1:-1] + dt * (u[i-1, 2:] - 2 * u[i-1, 1:-1] + u[i-1][0:-2]) / (dx**2)
@@ -136,10 +118,39 @@ def get_heat_fd(dt, dx, t_n, x_n, u0=None):
     return u, None
 
 
+def get_heat_fd_impl(dt, dx, t_n, x_n, u0=None):
+    u = np.copy(u0)
+    s = dt / dx**2
+
+    d = np.zeros((x_n, x_n))
+    for i in range(x_n - 1):
+        d[i][i] = 1 + 2*s
+
+    for i in range(x_n - 1):
+        d[i][i+1] = -s
+        d[i+1][i] = -s
+
+    for i in range(1, t_n):
+        u[i, 1:-1] = np.linalg.pinv(d) @ u[i-1, 1:-1]
+
+    return u, None
 
 
 if __name__ == '__main__':
-    u_true, cn = get_heat(0.2, 0., 1., 0., 20, 50, True)
-    g_u_true = get_heat_grad_t(0.2, 0., 1., 0., 20, 50, cn)
-    u_fe, _ = get_heat_fe(0.0001, 0.0, 0.5, 0.0, 20, 50)
-    u_fd, _ = get_heat_fd(0.0001, 0.0, 0.5, 0.0, 20, 50)
+    t_max = 0.2
+    t_min = 0.01
+    x_max = 1.
+    x_min = 0.
+    t_n = 64
+    x_n = 64
+
+    t, dt = np.linspace(t_min, t_max, t_n, retstep=True)
+    x, dx = np.linspace(x_min, x_max, x_n, retstep=True)
+
+    u0 = random_init(t, x)
+    u_fd, _ = get_heat_fd(dt, dx, t_n, x_n, u0)
+    u_fd_impl, _ = get_heat_fd_impl(dt, dx, t_n, x_n, u0)
+
+    # Keep initial conditions. Change if start from t=1
+    show_state(u_fd, "explicit")
+    show_state(u_fd_impl, "implicit")

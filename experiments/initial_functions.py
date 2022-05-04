@@ -1,7 +1,6 @@
 import numpy as np
 import torch
-from burgers import analytical_burgers_1d
-from heat import analytical_heat_1d, get_heat_fd
+from burgers import analytical_burgers_1d 
 
 def gaussian_init(t, x):
     u = np.zeros((t.shape[0], x.shape[0] + 2))
@@ -52,6 +51,26 @@ def high_dim_random_init(t, x):
 
     return u
 
+def analytical_heat_1d(t, x, n_max: int=1, rand=False):
+    """
+    Analytical solution to 1D heat equation.
+    Return solution for a single tuple (t, x)
+    @param t : time value
+    @param x : space value
+    @param n_max : constant used for computation of heat solution
+    @param rand : If true generates, a random vector of constants c to compute heat solution. Else, set all c values at 1.
+    @return u : solution
+    @return cn : vector of constant c used for computation.
+    """
+    L = 1.
+
+    cn = np.ones(n_max)
+    if rand:
+        cn = np.random.rand(n_max)
+
+    u = np.sum([cn[n] * np.exp((-np.pi**2 * n**2 * t) / L) * np.sin((n * np.pi * x) / L) for n in range(n_max)], axis=0)
+    return u, cn
+
 def heat_analytical_init(t, x, rand=False):
     u0 = np.zeros((t.shape[0], x.shape[0] + 2))
     u, _ = analytical_heat_1d(t[:, None], x[None, :], 50, rand)
@@ -61,28 +80,3 @@ def heat_analytical_init(t, x, rand=False):
 
     return u0
 
-def heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, rand=-1, typ=-1):
-    if (rand != -1):
-        np.random.seed(rand)
-
-    t, dt = np.linspace(t_min, t_max, t_n, retstep=True)
-    x, dx = np.linspace(x_min, x_max, x_n, retstep=True)
-    
-    rand_init = np.random.randint(2)
-    if typ > -1:
-        rand_init = typ
-
-    init = {
-        0: random_init(t, x),
-        1: high_dim_random_init(t, x)
-    }
-    
-    u0 = init[rand_init]
-    u_df, _ = get_heat_fd(dt, dx, t_n, x_n, u0)
-    
-    if np.isfinite(u_df).sum() != (u_df.shape[0] * u_df.shape[1]):
-        print("not finite.")
-        u0 = heat_analytical_init(t, x, False)
-        u_df, _ = get_heat_fd(dt, dx, t_n, x_n, u0)
-    
-    return u_df

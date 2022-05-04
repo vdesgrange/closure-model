@@ -35,6 +35,7 @@ def check_weights(net):
             weights = param.detach().numpy()
             show_state(weights, 'Layer weight')
 
+
 def downsampling(u, d=64):
     """
     @param u: snapshot

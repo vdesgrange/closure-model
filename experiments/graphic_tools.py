@@ -55,6 +55,7 @@ def show_state(a, title, x='x', y='t', lim=None, aspect=1):
     plt.xlabel(x);
     plt.ylabel(y);
     plt.title(title)
+    plt.show()
 
 
 def matrix_plotter(M):
