@@ -25,15 +25,12 @@ def get_burgers(t_max, t_min, x_max, x_min, t_n, x_n, nu):
     return analytical_burgers_1d(t_axis[:, None], x_axis[None, :], nu)
 
 
-def get_burgers_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0):
+def get_burgers_fd(dt, dx, t_n, nu, u0):
     """
     Compute value of 1D non-conservative viscous burgers equation for each time step.
     :param nu: viscosity parameter
     """
-    dt = (t_max - t_min) / t_n
-    dx = (x_max - x_min) / x_n
-
-    u = u0
+    u = np.copy(u0)
 
     for i in range(1, t_n):
         a = nu * (u[i-1, 2:] - 2 * u[i-1, 1:-1] + u[i-1, 0:-2]) / (dx**2)
@@ -42,14 +39,12 @@ def get_burgers_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0):
     return u
 
 
-def get_burgers_cons_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0):
+def get_burgers_cons_fd(dt, dx, t_n, nu, u0):
     """
     Compute value of 1D conservative viscous burgers equation for each time step.
     :param nu: viscosity parameter
     """
-    dt = (t_max - t_min) / t_n
-    dx = (x_max - x_min) / x_n
-    u = u0
+    u = np.copy(u0)
     
     f = lambda u : np.power(u, 2) / 2
     
@@ -88,24 +83,21 @@ def get_M(X, u, dt, dx, nu):
     return M
 
 
-def get_burgers_nicolson(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0):
+def get_burgers_nicolson(dt, dx, t_n, x_n, nu, u0):
     """
     Crank-Nicolson algorithm for 1D non-conservative viscous burgers equation.
     """
-    dt = (t_max - t_min) / t_n
-    dx = (x_max - x_min) / x_n
-    
-    u = np.zeros((t_n, x_n))
     s = nu * dt / dx**2
     d = get_D(x_n, s)
-    u_old = u0[0, 1:-1]
-    u[0, :] = u_old
-    
+
+    u = np.zeros((t_n, x_n))
+    u[0, :] = np.copy(u0[0, 1:-1])
+
     for i in range(1, t_n):
         b = d @ u[i-1, :]
         m = get_M(x_n, u[i-1, :], dx, dt, nu)
-        u[i, :] = la.solve(m, b, sym_pos=False, check_finite=True)
-        
+        u[i, :] = la.solve(m, b)
+
     return u
 
 
