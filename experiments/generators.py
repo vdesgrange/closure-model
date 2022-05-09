@@ -65,7 +65,8 @@ def get_burgers_batch(t_max, t_min, x_max, x_min, t_n, x_n, nu, rand=-1, downsiz
     t = np.linspace(t_min, t_max, t_batch_size)
     batch_t = torch.from_numpy(t).float()
     batch_u0 = u_s[0, :]
-    batch_u = torch.stack([u_s[i, :] for i in range(0, t_batch_size)], dim=0)
+    #batch_u = torch.stack([u_s[i, :] for i in range(0, t_batch_size)], dim=0)
+    batch_u = u_s
 
     return batch_t, batch_u0, batch_u
 
