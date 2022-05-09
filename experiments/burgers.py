@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.linalg as la
+import scipy.integrate as integrate
 
 def analytical_burgers_1d(t, x, nu):
     """
@@ -100,6 +101,33 @@ def get_burgers_nicolson(dt, dx, t_n, x_n, nu, u0):
 
     return u
 
+def get_burgers_fft(t, dx, x_n, nu, u0, method="LSODA"):
+    """
+    @param t: t evaluation step
+    @param dx: spacial step
+    @param x_n: number spatial discretization steps
+    @param nu: viscosity
+    @param u0: initial conditions (t_n by x_n matrix)
+    @param method: method to use. Default LSODA (odeint default). BDF recommanded.
+    """
+    k = 2 * np.pi * np.fft.fftfreq(x_n, d=dx)
+
+    def burgers_pde(t, u, k, nu): # t, u for odeint, u,t for solve_ivp
+        # FFT - Fourier domain
+        u_hat = np.fft.fft(u)
+        u_hat_x = 1j * k * u_hat # First differential
+        u_hat_xx = -k**2 * u_hat # Second differential
+
+        # IFFT - Spatial domain
+        u_x = np.fft.ifft(u_hat_x)
+        u_xx = np.fft.ifft(u_hat_xx)
+
+        u_t = -u * u_x + nu * u_xx
+        return u_t.real
+
+    u_rad =  integrate.solve_ivp(burgers_pde, t_span=(t[0], t[-1]), y0=u0[0, 1:-1], t_eval=t, method=method, args=(k, nu))
+    # u_rad = integrate.odeint(burgers_pde, u0[0, 1:-1], t, args=(k, nu,)) # LSODA
+    return u_rad.y.T # Just u_rad for odeint
 
 def set_initial_condition(t_max, t_min, x_max, x_min, t_n, x_n, nu):
     """

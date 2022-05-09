@@ -1,8 +1,9 @@
 import numpy as np
 import torch
-from initial_functions import random_init, high_dim_random_init, heat_analytical_init
+from initial_functions import random_init, high_dim_random_init, heat_analytical_init, burgers_analytical_init
 from analysis_tools import downsampling
 from heat import get_heat_fd_impl
+from burgers import get_burgers_fft
 from graphic_tools import show_state
 
 def get_heat_batch(t_max, t_min, x_max, x_min, t_n, x_n, rand=-1, downsize=0):
@@ -85,12 +86,12 @@ def burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, rand=-1
     }
 
     u0 = init[rand_init]
-    u_df = get_burgers_cons_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0)
+    u_df = get_burgers_fft(t, dx, x_n, nu, u0, method="BDF")
 
     if np.isfinite(u_df).sum() != (u_df.shape[0] * u_df.shape[1]):
         print("not finite.")
         u0 = burgers_analytical_init(t, x, nu)
-        u_df = get_burgers_fd(t_max, t_min, x_max, x_min, t_n, x_n, nu, u0)
+        u_df = get_burgers_fft(t, dx, x_n, nu, u0, method="BDF")
 
     return u_df
 

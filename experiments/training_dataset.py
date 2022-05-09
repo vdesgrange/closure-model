@@ -31,10 +31,10 @@ def generate_burgers_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, nu, 
     train_set = []
 
     for _ in range(n):
-        t, dt = np.linspace(t_min, t_max, t_n * 8, retstep=True)
-        high_dim = burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n * 8, x_n * 8, nu, rand=-1, typ=typ)
-        low_dim = downsampling(high_dim, 8)
-        low_t = np.array([(i * 3.5) * dt for i in range(t_n)])
+        t, dt = np.linspace(t_min, t_max, t_n * 64, retstep=True)
+        high_dim = burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n * 64, x_n * 64, nu, rand=-1, typ=typ)
+        low_dim = downsampling(high_dim, 64)
+        low_t = np.array([(i * 31.5) * dt for i in range(t_n)])
 
         batch_low_t = torch.from_numpy(low_t).float()
         batch_low_dim = torch.from_numpy(low_dim).float()
