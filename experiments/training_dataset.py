@@ -52,6 +52,47 @@ def read_dataset(filepath='heat_training_set.pt'):
     return torch.load(filepath)
 
 
+def process_dataset(dataset):
+    """
+    Dataset processing (method A)
+    Split provided dataset into a training and validation set split according to time discretization
+    @param dataset: list of tuples [low_dim_t, low_dim_u, high_dim_t, high_dim_u]
+    @return tr_dataset, val_dataset: dataset split according to time discretization
+    """
+    batch_size = len(dataset)
+    dataset_idx = np.arange(0, batch_size)
+    tr_min_t = 0
+    tr_max_t = int(len(dataset[0][0]) / 5 * 4)
+    val_max_t = int(tr_max_t + len(dataset[0][0]) / 5 * 1)
+    
+    h_tr_min_t = 0
+    h_tr_max_t = int(len(dataset[0][2]) / 5 * 4)
+    h_val_max_t = int(h_tr_max_t + len(dataset[0][2]) / 5 * 1)
+    
+    training_set = []
+    validation_set = []
+    
+    for i in dataset_idx:
+        t, bu, ht, hbu = dataset[i]
+        
+        tr_t =  t[tr_min_t:tr_max_t]
+        tr_bu = bu[tr_min_t:tr_max_t, :]
+        
+        val_t =  t[tr_max_t:val_max_t]
+        val_bu = bu[tr_max_t:val_max_t, :]
+        
+        h_tr_t =  ht[h_tr_min_t:h_tr_max_t]
+        h_tr_bu = hbu[h_tr_min_t:h_tr_max_t, :]
+        
+        h_val_t =  ht[h_tr_max_t:h_val_max_t]
+        h_val_bu = hbu[h_tr_max_t:h_val_max_t, :]
+        
+        training_set.append([tr_t, tr_bu, h_tr_t, h_tr_bu])
+        validation_set.append([val_t, val_bu, h_val_t, h_val_bu])
+        
+    return training_set, validation_set
+
+
 if __name__ == '__main__':
     t_max = 0.2
     t_min = 0.01
@@ -61,4 +102,4 @@ if __name__ == '__main__':
     x_n = 64
 
     training_set = generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, 256, 0, 'random_heat_training_set2.pt')
-    # training_set = read_dataet('dataset/random_heat_training_set.pt')
+    # training_set = read_dataset('dataset/random_heat_training_set.pt')
