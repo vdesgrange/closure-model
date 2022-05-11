@@ -1,6 +1,5 @@
 import numpy as np
-from initial_functions import random_init, analytical_heat_1d
-from graphic_tools import show_state
+from equations.initial_functions import random_init, analytical_heat_1d
 
 
 
@@ -150,7 +149,3 @@ if __name__ == '__main__':
     u0 = random_init(t, x)
     u_fd, _ = get_heat_fd(dt, dx, t_n, x_n, u0)
     u_fd_impl, _ = get_heat_fd_impl(dt, dx, t_n, x_n, u0)
-
-    # Keep initial conditions. Change if start from t=1
-    show_state(u_fd, "explicit")
-    show_state(u_fd_impl, "implicit")

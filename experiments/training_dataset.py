@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from analysis_tools import downsampling
+from utils.analysis_tools import downsampling
 from generators import heat_snapshot_generator, burgers_snapshot_generator
 
 

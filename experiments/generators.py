@@ -1,10 +1,10 @@
 import numpy as np
 import torch
-from initial_functions import random_init, high_dim_random_init, heat_analytical_init, burgers_analytical_init
-from analysis_tools import downsampling
-from heat import get_heat_fd_impl
-from burgers import get_burgers_fft
-from graphic_tools import show_state
+from equations.initial_functions import random_init, high_dim_random_init, heat_analytical_init, burgers_analytical_init
+from utils.analysis_tools import downsampling
+from equations.heat import get_heat_fd_impl
+from equations.burgers import get_burgers_fft
+from utils.graphic_tools import show_state
 
 def get_heat_batch(t_max, t_min, x_max, x_min, t_n, x_n, rand=-1, downsize=0):
     t_batch_size = t_n

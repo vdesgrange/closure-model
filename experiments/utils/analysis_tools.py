@@ -1,6 +1,6 @@
 import numpy as np
 from torchdiffeq import odeint_adjoint as odeint
-from graphic_tools import show_state
+from utils.graphic_tools import show_state
 
 
 def relative_err(u_a, u_b):

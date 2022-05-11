@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from burgers import analytical_burgers_1d 
+from equations.burgers import analytical_burgers_1d 
 
 def gaussian_init(t, x):
     u = np.zeros((t.shape[0], x.shape[0] + 2))

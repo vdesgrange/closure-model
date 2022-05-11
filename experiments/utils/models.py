@@ -21,13 +21,13 @@ class BurgersModelA(nn.Module):
     def __init__(self, n):
         super(BurgersModelA, self).__init__()
         self.net = nn.Sequential(
-            nn.Linear(n, n),
+            nn.Linear(in_features=n, out_features=int(n/2)),
             nn.Tanh(),
-            nn.Linear(n, int(n/2)),
+            nn.Linear(in_features=int(n/2), out_features=int(n/2)),
             nn.Tanh(),
-            nn.Linear(int(n/2), n),
+            nn.Linear(in_features=int(n/2), out_features=int(n/2)),
             nn.Tanh(),
-            nn.Linear(n, n),
+            nn.Linear(in_features=int(n/2), out_features=n),
             nn.Tanh()
         )
         
