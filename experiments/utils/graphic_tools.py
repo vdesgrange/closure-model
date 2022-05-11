@@ -21,6 +21,20 @@ def simple_plotter(ks, title='Simple plot', L=1.0):
     plt.show()
 
 
+def double_plotter(u1, u2, x_max, x_min, x_n, t_idx=[0, -1], label_1='Expected', label_2='Real', title='Double plotter'):
+    fig, ax = plt.subplots(dpi=200)
+    fig.tight_layout()
+    plt.title(title)
+
+    for t in t_idx:
+        x = np.linspace(x_min, x_max, x_n)
+        ax.plot(x, u1[t, :], label='{} t={}'.format(label_1, t))
+        ax.plot(x, u2[t, :], label='{} t={}'.format(label_2, t))
+
+    plt.legend()
+    plt.show()
+
+
 def animate_plot(u, x):
     fig, ax = plt.subplots(dpi=100)
     xdata, ydata = x, u[0,:]
@@ -104,7 +118,6 @@ def domain_curve(k, v, L):
     plt.title(r'Eigenmode for $\lambda$={:2f}'.format(frequency))
     ax.plot(v, 'bo')
     plt.show()
-
 
 def visualize_u_from_F(F, t, u, u0):
     pred_u = odeint(F, u0, t).detach().numpy() # time axis is inversed compare to u_true
