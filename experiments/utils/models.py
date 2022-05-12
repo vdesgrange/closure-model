@@ -17,6 +17,21 @@ class HeatModel(nn.Module):
         return self.net(u)
 
 
+class HeatModelNoBias(nn.Module):
+    def __init__(self, n):
+        super(HeatModelNoBias, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n, n, bias=False),
+        )
+
+        for m in self.net.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, mean=0, std=0.1)
+
+    def forward(self, t, u):
+        return self.net(u)
+
+
 class BurgersModelA(nn.Module):
     def __init__(self, n):
         super(BurgersModelA, self).__init__()
