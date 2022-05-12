@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.sparse as sp
 from equations.initial_functions import random_init, analytical_heat_1d
 
 
@@ -121,16 +122,19 @@ def get_heat_fd_impl(dt, dx, t_n, x_n, u0=None):
     u = np.copy(u0)
     s = dt / dx**2
 
-    d = np.zeros((x_n, x_n))
-    for i in range(x_n - 1):
-        d[i][i] = 1 + 2*s
+    # d = np.zeros((x_n, x_n))
+    # for i in range(x_n - 1):
+    #     d[i][i] = 1 + 2*s
+    #
+    # for i in range(x_n - 1):
+    #     d[i][i+1] = -s
+    #     d[i+1][i] = -s
 
-    for i in range(x_n - 1):
-        d[i][i+1] = -s
-        d[i+1][i] = -s
+    d = sp.diags([-s * np.ones(x_n - 1), (1 + 2 * s) * np.ones(x_n), -s * np.ones(x_n - 1)], [-1, 0, 1], format = "csc")
 
     for i in range(1, t_n):
-        u[i, 1:-1] = np.linalg.pinv(d) @ u[i-1, 1:-1]
+        # u[i, 1:-1] = np.linalg.pinv(d) @ u[i-1, 1:-1]
+        u[i, 1:-1] = sp.linalg.spsolve(d, u[i-1, 1:-1])
 
     return u, None
 
