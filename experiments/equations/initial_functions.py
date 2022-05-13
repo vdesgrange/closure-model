@@ -3,20 +3,20 @@ import torch
 from equations.burgers import analytical_burgers_1d 
 
 def gaussian_init(t, x):
-    u = np.zeros((t.shape[0], x.shape[0] + 2))
-    u[0, 1:-1] = np.exp(-(x - 1)**2)
+    u = np.zeros((t.shape[0], x.shape[0]))
+    u[0, :] = np.exp(-(x - 1)**2)
     u[:, 0] =  0
     u[:, -1] = 0
 
     return u
 
 def burgers_analytical_init(t, x, nu):
-    u = np.zeros((t.shape[0], x.shape[0] + 2))
+    u = np.zeros((t.shape[0], x.shape[0]))
 
     u_true = analytical_burgers_1d(t[:, None], x[None, :], nu)
-    u[0, 1:-1] = u_true[0, :]
-    u[:, 0] =  u_true[:, 0]
-    u[:, -1] = u_true[:, -1]
+    u[0, :] = np.copy(u_true[0, :])
+    u[:, 0] =  0 # u_true[:, 0]
+    u[:, -1] = 0 # u_true[:, -1]
 
     return u
 
@@ -26,9 +26,10 @@ def random_init(t, x):
     Statistical analysis and simulation of random shocks in stochastic Burgers equation
     Forcing term f = 0
     """
-    u = np.zeros((t.shape[0], x.shape[0] + 2))
+    #u = np.zeros((t.shape[0], x.shape[0] + 2))
+    u = np.zeros((t.shape[0], x.shape[0]))
     nu = np.random.normal(0, 0.25, x.shape[0])
-    u[0, 1:-1] = np.sin(x) + nu
+    u[0, :] = np.sin(x) + nu
     u[:, 0] =  0
     u[:, -1] = 0
 
@@ -41,11 +42,12 @@ def high_dim_random_init(t, x):
     """
     m = 48
     nu = np.random.normal(0, 1, 2 * m)
-    u = np.zeros((t.shape[0], x.shape[0] + 2))
+    #u = np.zeros((t.shape[0], x.shape[0] + 2))
+    u = np.zeros((t.shape[0], x.shape[0]))
 
     s = [(nu[2 * k - 1] * np.sin(k * x)) + (nu[2 * k - 2] * np.cos(k * x)) for k in range(1, m+1)]
 
-    u[0, 1:-1] = (1 / np.sqrt(m)) * np.sum(s, axis=0)
+    u[0, :] = (1 / np.sqrt(m)) * np.sum(s, axis=0)
     u[:, 0] =  0
     u[:, -1] = 0
 
@@ -68,15 +70,14 @@ def analytical_heat_1d(t, x, n_max: int=1, rand=False):
     if rand:
         cn = np.random.rand(n_max)
 
-    u = np.sum([cn[n] * np.exp((-np.pi**2 * n**2 * t) / L) * np.sin((n * np.pi * x) / L) for n in range(n_max)], axis=0)
+    u = np.sum([cn[n] * np.exp((-np.pi**2 * n**2 * t) / L**2) * np.sqrt(2 / L) * np.sin((n * np.pi * x) / L) for n in range(n_max)], axis=0)
     return u, cn
 
 def heat_analytical_init(t, x, rand=False):
-    u0 = np.zeros((t.shape[0], x.shape[0] + 2))
+    u0 = np.zeros((t.shape[0], x.shape[0]))
     u, _ = analytical_heat_1d(t[:, None], x[None, :], 50, rand)
-    u0[0, 1:-1] = u[0, :]
+    u0[0, :] = np.copy(u[0, :])
     u0[:, 0] = 0
     u0[:, -1] = 0
 
     return u0
-

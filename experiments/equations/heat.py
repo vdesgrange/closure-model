@@ -17,7 +17,6 @@ def get_heat(t_max, t_min, x_max, x_min, t_n, x_n, rand=False):
 def analytical_grad_t_heat_1d_t(t, x, cn=None, n_max=1):
     """
     Analytical gradient by t of the solution to 1D heat equation
-    @param 
     @return : gradient value for a tuple (t, x)
     """
 
@@ -133,9 +132,12 @@ def get_heat_fd_impl(dt, dx, t_n, x_n, u0=None):
     # for i in range(1, t_n):
     #     u[i, 1:-1] = np.linalg.pinv(d) @ u[i-1, 1:-1]
     d = sp.diags([-s * np.ones(x_n - 1), (1 + 2 * s) * np.ones(x_n), -s * np.ones(x_n - 1)], [-1, 0, 1], format = "csc")
-
     for i in range(1, t_n):
-        u[i, 1:-1] = sp.linalg.spsolve(d, u[i-1, 1:-1])
+        u[i, :] = sp.linalg.spsolve(d, u[i-1, :])
+
+    u[:, 0] = 0
+    u[:, -1] = 0
+
 
     return u, None
 
