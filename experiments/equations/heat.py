@@ -1,17 +1,16 @@
 import numpy as np
 import scipy.sparse as sp
+import scipy.integrate as integrate
 from equations.initial_functions import random_init, analytical_heat_1d
 
 
 
-def get_heat(t_max, t_min, x_max, x_min, t_n, x_n, rand=False):
+def get_heat(t, x, n=[], c=[], k=1.):
     """
     Compute heat equation solution values for a set of (t, x) tuples.
     """
-    t_axis = np.linspace(t_min, t_max, t_n)
-    x_axis = np.linspace(x_min, x_max, x_n)
 
-    return analytical_heat_1d(t_axis[:, None], x_axis[None, :], 50, rand)
+    return analytical_heat_1d(t[:, None], x[None, :], n, c, k)
 
 
 def analytical_grad_t_heat_1d_t(t, x, cn=None, n_max=1):
@@ -121,16 +120,6 @@ def get_heat_fd_impl(dt, dx, t_n, x_n, u0=None):
     u = np.copy(u0)
     s = dt / dx**2
 
-    # d = np.zeros((x_n, x_n))
-    # for i in range(x_n - 1):
-    #     d[i][i] = 1 + 2*s
-    #
-    # for i in range(x_n - 1):
-    #     d[i][i+1] = -s
-    #     d[i+1][i] = -s
-    #
-    # for i in range(1, t_n):
-    #     u[i, 1:-1] = np.linalg.pinv(d) @ u[i-1, 1:-1]
     d = sp.diags([-s * np.ones(x_n - 1), (1 + 2 * s) * np.ones(x_n), -s * np.ones(x_n - 1)], [-1, 0, 1], format = "csc")
     for i in range(1, t_n):
         u[i, :] = sp.linalg.spsolve(d, u[i-1, :])
@@ -140,6 +129,24 @@ def get_heat_fd_impl(dt, dx, t_n, x_n, u0=None):
 
 
     return u, None
+
+
+def get_heat_fft(t, dx, x_n, d=1, u0=None, method="LSODA"):
+    k = 2 * np.pi * np.fft.fftfreq(x_n, d=dx)
+
+    def heat_pde(t, u, k, d): # t, u for odeint, u,t for solve_ivp
+        # FFT - Fourier domain
+        u_hat = np.fft.fft(u)
+        u_hat_xx = -k**2 * u_hat # Second differential
+
+        # IFFT - Spatial domain
+        u_xx = np.fft.ifft(u_hat_xx)
+
+        u_t =  d * u_xx
+        return u_t.real
+
+    u_rad =  integrate.solve_ivp(heat_pde, t_span=(t[0], t[-1]), y0=u0[0, :], t_eval=t, method=method, args=(k, d))
+    return u_rad.y.T
 
 
 if __name__ == '__main__':

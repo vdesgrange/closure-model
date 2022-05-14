@@ -53,7 +53,7 @@ def high_dim_random_init(t, x):
 
     return u
 
-def analytical_heat_1d(t, x, n_max: int=1, rand=False):
+def analytical_heat_1d(t, x, n=[], c=[], k=1.):
     """
     Analytical solution to 1D heat equation.
     Return solution for a single tuple (t, x)
@@ -65,17 +65,15 @@ def analytical_heat_1d(t, x, n_max: int=1, rand=False):
     @return cn : vector of constant c used for computation.
     """
     L = 1.
+    if len(c) == 0:
+        c = np.divide(np.random.normal(0., 1., len(n)), n)
 
-    cn = np.ones(n_max)
-    if rand:
-        cn = np.random.rand(n_max)
+    u = np.sum([c[i] * np.exp(- k * (np.pi * n[i] / L)**2 * t) * np.sqrt(2 / L) * np.sin(n[i] * np.pi * x / L) for i in range(len(n))], axis=0)
+    return u, c
 
-    u = np.sum([cn[n] * np.exp((-np.pi**2 * n**2 * t) / L**2) * np.sqrt(2 / L) * np.sin((n * np.pi * x) / L) for n in range(n_max)], axis=0)
-    return u, cn
-
-def heat_analytical_init(t, x, rand=False):
+def heat_analytical_init(t, x, n=[], c=[], k=1.):
     u0 = np.zeros((t.shape[0], x.shape[0]))
-    u, _ = analytical_heat_1d(t[:, None], x[None, :], 50, rand)
+    u, _ = analytical_heat_1d(t[:, None], x[None, :], n, c, k)
     u0[0, :] = np.copy(u[0, :])
     u0[:, 0] = 0
     u0[:, -1] = 0
