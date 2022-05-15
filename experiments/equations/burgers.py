@@ -125,7 +125,7 @@ def get_burgers_fft(t, dx, x_n, nu, u0, method="LSODA"):
         u_t = -u * u_x + nu * u_xx
         return u_t.real
 
-    u_rad =  integrate.solve_ivp(burgers_pde, t_span=(t[0], t[-1]), y0=u0[0, 1:-1], t_eval=t, method=method, args=(k, nu))
+    u_rad =  integrate.solve_ivp(burgers_pde, t_span=(t[0], t[-1]), y0=u0[0, :], t_eval=t, method=method, args=(k, nu))
     # u_rad = integrate.odeint(burgers_pde, u0[0, 1:-1], t, args=(k, nu,)) # LSODA
     return u_rad.y.T # Just u_rad for odeint
 

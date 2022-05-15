@@ -7,7 +7,6 @@ from equations.burgers import get_burgers_fft
 from utils.graphic_tools import show_state
 
 def get_heat_batch(t_max, t_min, x_max, x_min, t_n, x_n, rand=-1, typ=-1, d=1):
-    # Compute a snapshot of the solution u(t, x).
     u_s = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, rand, typ, d)
     u_s = torch.from_numpy(u_s).float()
     t = torch.from_numpy(np.linspace(t_min, t_max, t_n)).float()
@@ -43,24 +42,12 @@ def heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, rand=-1, typ=-
     
     return u_df
 
-def get_burgers_batch(t_max, t_min, x_max, x_min, t_n, x_n, nu, rand=-1, downsize=0):
-    t_batch_size = t_n
-
-    # Compute a snapshot of the solution u(t, x).
-    u_s = burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, rand, -1)
-
-    if downsize > 0:
-        u_s = downsampling(u_s, downsize)
-        t_batch_size = t_n // downsize
+def get_burgers_batch(t_max, t_min, x_max, x_min, t_n, x_n, nu, rand=-1, typ=-1):
+    u_s = burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, rand, typ)
     u_s = torch.from_numpy(u_s).float()
-
-    t = np.linspace(t_min, t_max, t_batch_size)
-    batch_t = torch.from_numpy(t).float()
-    batch_u0 = u_s[0, :]
-    #batch_u = torch.stack([u_s[i, :] for i in range(0, t_batch_size)], dim=0)
-    batch_u = u_s
-
-    return batch_t, batch_u0, batch_u
+    t = torch.from_numpy(np.linspace(t_min, t_max, t_n)).float()
+    u0 = np.copy(u_s[0, :])
+    return t, u0, u_s 
 
 def burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, rand=-1, typ=-1):
     if (rand != -1):

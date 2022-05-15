@@ -44,8 +44,7 @@ def high_dim_random_init(t, x):
     nu = np.random.normal(0, 1, 2 * m)
     #u = np.zeros((t.shape[0], x.shape[0] + 2))
     u = np.zeros((t.shape[0], x.shape[0]))
-
-    s = [(nu[2 * k - 1] * np.sin(k * x)) + (nu[2 * k - 2] * np.cos(k * x)) for k in range(1, m+1)]
+    s = np.array([(nu[2 * k - 1] * np.sin(k * x)) + (nu[2 * k - 2] * np.cos(k * x)) for k in range(1, m+1)])
 
     u[0, :] = (1 / np.sqrt(m)) * np.sum(s, axis=0)
     u[:, 0] =  0
