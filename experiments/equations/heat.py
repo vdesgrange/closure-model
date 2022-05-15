@@ -127,7 +127,6 @@ def get_heat_fd_impl(dt, dx, t_n, x_n, u0=None):
     u[:, 0] = 0
     u[:, -1] = 0
 
-
     return u, None
 
 

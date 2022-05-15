@@ -59,14 +59,14 @@ def analytical_heat_1d(t, x, n=[], c=[], k=1.):
     Return solution for a single tuple (t, x)
     @param t : time value
     @param x : space value
-    @param n_max : constant used for computation of heat solution
-    @param rand : If true generates, a random vector of constants c to compute heat solution. Else, set all c values at 1.
+    @param c :
+    @param n :
     @return u : solution
     @return cn : vector of constant c used for computation.
     """
     L = 1.
     if len(c) == 0:
-        c = np.divide(np.random.normal(0., 1., len(n)), n)
+        c = np.divide(np.random.normal(0., 1., len(n)), n) # n = range(1, n_max), 1 to avoid dividing by 0
 
     u = np.sum([c[i] * np.exp(- k * (np.pi * n[i] / L)**2 * t) * np.sqrt(2 / L) * np.sin(n[i] * np.pi * x / L) for i in range(len(n))], axis=0)
     return u, c

@@ -2,30 +2,19 @@ import numpy as np
 import torch
 from equations.initial_functions import random_init, high_dim_random_init, heat_analytical_init, burgers_analytical_init
 from utils.analysis_tools import downsampling
-from equations.heat import get_heat_fd_impl
+from equations.heat import get_heat_fd_impl, get_heat_fft
 from equations.burgers import get_burgers_fft
 from utils.graphic_tools import show_state
 
-def get_heat_batch(t_max, t_min, x_max, x_min, t_n, x_n, rand=-1, downsize=0):
-    t_batch_size = t_n
-
+def get_heat_batch(t_max, t_min, x_max, x_min, t_n, x_n, rand=-1, typ=-1, d=1):
     # Compute a snapshot of the solution u(t, x).
-    u_s = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, rand)
-
-    if downsize > 0:
-        u_s = downsampling(u_s, downsize)
-        t_batch_size = t_n // downsize
+    u_s = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, rand, typ, d)
     u_s = torch.from_numpy(u_s).float()
+    t = torch.from_numpy(np.linspace(t_min, t_max, t_n)).float()
+    u0 = np.copy(u_s[0, :])
+    return t, u0, u_s
 
-    t = np.linspace(t_min, t_max, t_batch_size)
-    batch_t = torch.from_numpy(t).float()
-    batch_u0 = u_s[0, :]
-    # batch_u = torch.stack([u_s[i, :] for i in range(0, t_batch_size)], dim=0)
-    batch_u = u_s
-
-    return batch_t, batch_u0, batch_u
-
-def heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, rand=-1, typ=-1):
+def heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, rand=-1, typ=-1, d=1):
     if (rand != -1):
         np.random.seed(rand)
 
@@ -38,16 +27,19 @@ def heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, rand=-1, typ=-
 
     init = {
         0: random_init,
-        1: high_dim_random_init
+        1: high_dim_random_init,
+        2: (lambda a, b: heat_analytical_init(a, b, list(range(1, 51)), [], True))
     }
     
     u0 = np.copy(init[rand_init](t, x))
-    u_df, _ = get_heat_fd_impl(dt, dx, t_n, x_n, u0)
+    # u_df, _ = get_heat_fd_impl(dt, dx, t_n, x_n, u0)
+    u_df = get_heat_fft(t, dx, x_n, d, u0)
     
     if np.isfinite(u_df).sum() != (u_df.shape[0] * u_df.shape[1]):
         print("not finite.")
         u0 = np.copy(heat_analytical_init(t, x, False))
-        u_df, _ = get_heat_fd_impl(dt, dx, t_n, x_n, u0)
+        # u_df, _ = get_heat_fd_impl(dt, dx, t_n, x_n, u0)
+        u_df = get_heat_fft(t, dx, x_n, d, u0)
     
     return u_df
 

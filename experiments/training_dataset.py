@@ -4,13 +4,13 @@ from utils.analysis_tools import downsampling
 from generators import heat_snapshot_generator, burgers_snapshot_generator
 
 
-def generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=256, typ=1, filename='heat_training_set.pt'):
+def generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=256, typ=1, d=1, filename='heat_training_set.pt'):
     train_set = []
 
     for i in range(n):
         print('Item ', i)
         t, dt = np.linspace(t_min, t_max, t_n * 4, retstep=True)
-        high_dim = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n * 4, x_n * 4, rand=-1, typ=typ)
+        high_dim = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n * 4, x_n * 4, rand=-1, typ=typ, d=d)
         low_dim = downsampling(high_dim, 4)
         low_t = np.array([(i * 1.5) * dt for i in range(t_n)])
 
