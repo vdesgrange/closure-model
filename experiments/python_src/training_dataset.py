@@ -9,10 +9,10 @@ def generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=256, 
 
     for i in range(n):
         print('Item ', i)
-        t, dt = np.linspace(t_min, t_max, t_n * 4, retstep=True)
+        t, _ = np.linspace(t_min, t_max, t_n * 4, retstep=True)
         high_dim = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n * 4, x_n * 4, rand=-1, typ=typ, d=d)
         low_dim = downsampling(high_dim, 4)
-        low_t = np.array([(i * 1.5) * dt for i in range(t_n)])
+        low_t = np.linspace(t_min, t_max, t_n)
 
         batch_low_t = torch.from_numpy(low_t).float()
         batch_low_dim = torch.from_numpy(low_dim).float()
@@ -34,7 +34,8 @@ def generate_burgers_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, nu, 
         t, dt = np.linspace(t_min, t_max, t_n * 64, retstep=True)
         high_dim = burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n * 64, x_n * 64, nu, rand=-1, typ=typ)
         low_dim = downsampling(high_dim, 64)
-        low_t = np.array([(i * 31.5) * dt for i in range(t_n)])
+        # low_t = np.array([(i * 31.5) * dt for i in range(t_n)])
+        low_t = np.linspace(t_min, t_max, t_n * 64)
 
         batch_low_t = torch.from_numpy(low_t).float()
         batch_low_dim = torch.from_numpy(low_dim).float()
@@ -74,6 +75,7 @@ def process_dataset(dataset):
     
     for i in dataset_idx:
         t, bu, ht, hbu = dataset[i]
+        # t = torch.from_numpy(np.linspace(0., 0.5, len(dataset[0][0]))).float()
         
         tr_t =  t[tr_min_t:tr_max_t]
         tr_bu = bu[tr_min_t:tr_max_t, :]
