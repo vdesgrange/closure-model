@@ -63,24 +63,27 @@ function downsampling(u, d)
 end
 
 
-function generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=256, typ=-1, d=1., k=1., filename="heat_training_set.pt")
-  train_set = []
-  upscale = 4
+function generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=256, typ=-1, d=1., k=1., filename="heat_training_set.pt", name)
+  train_set = [];
+  upscale = 4;
+
   for i in range(1, n, step=1)
     print("Item", i)
-    high_t, high_dim = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n * upscale, x_n * upscale, typ, d, k)
-    low_dim = downsampling(high_dim, upscale)
-    low_t = LinRange(t_min, t_max, t_n)
+    high_t, high_dim = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n * upscale, x_n * upscale, typ, d, k);
+    low_dim = downsampling(high_dim, upscale);
+    low_t = LinRange(t_min, t_max, t_n);
 
-    item = [low_t, low_dim, high_t, high_dim]
-    push!(train_set, item)
+    item = [low_t, low_dim, high_t, high_dim];
+    push!(train_set, item);
   end
 
-  save(filename, "training_set", train_set)
+  save(filename, name, train_set);
   return train_set
 end
 
 function read_dataset(filepath)
+  training_set = load(filepath)
+  return training_set
 end
 
 function process_dataset(dataset)
