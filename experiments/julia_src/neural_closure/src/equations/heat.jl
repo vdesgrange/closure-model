@@ -41,7 +41,7 @@ function get_heat_fft(t, dx, x_n, d, u0=none)
 
   tspan = (t[1], t[end])
   prob = ODEProblem(ODEFunction(f), copy(u0), tspan, (k, d))
-  sol = solve(prob, Tsit5(), saveat=t[2:end-1], reltol=1e-8, abstol=1e-8)
+  sol = solve(prob, Tsit5(), saveat=t, reltol=1e-8, abstol=1e-8)
 
   return sol.t, hcat(sol.u...)
 end

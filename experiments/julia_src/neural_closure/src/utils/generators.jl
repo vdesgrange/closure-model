@@ -1,5 +1,7 @@
 module Generator
 
+using FileIO
+using Statistics
 using Random
 
 include("../equations/initial_functions.jl")
@@ -47,7 +49,35 @@ end
 function burgers_snapshot_generator()
 end
 
-function generate_heat_training_dataset()
+function downsampling(u, d)
+  n, m = floor.(Int, size(u) ./ d)
+  d_u = zeros(n, m)
+
+  for i in range(0, n - 1, step=1)
+    for j in range(0, m - 1, step=1)
+      d_u[i+1, j+1] = mean(u[i*d + 1:(i + 1)*d, j*d + 1:(j + 1)*d])
+    end
+  end
+
+  return d_u
+end
+
+
+function generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=256, typ=-1, d=1., k=1., filename="heat_training_set.pt")
+  train_set = []
+  upscale = 4
+  for i in range(1, n, step=1)
+    print("Item", i)
+    high_t, high_dim = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n * upscale, x_n * upscale, typ, d, k)
+    low_dim = downsampling(high_dim, upscale)
+    low_t = LinRange(t_min, t_max, t_n)
+
+    item = [low_t, low_dim, high_t, high_dim]
+    push!(train_set, item)
+  end
+
+  save(filename, "training_set", train_set)
+  return train_set
 end
 
 function read_dataset(filepath)
