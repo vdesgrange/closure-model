@@ -72,8 +72,8 @@ end
 
 function heat_analytical_init(t, x, n=[], c=[], k=1.)
   u0 = zeros(Float64, size(t, 1), size(x, 1))
-  u = analytical_heat_1d(t, x, n, c, k)
-  u0[1, :] .= u[1, :]
+  u = analytical_heat_1d([t[1]], x, n, c, k)
+  u0[1, :] = copy(u[1, :])
   u0[:, 1] .= 0
   u0[:, end] .= 0
 
