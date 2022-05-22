@@ -1,11 +1,12 @@
 module Generator
 
 using FileIO
+using JLD2
 using Statistics
 using Random
 
 include("../equations/initial_functions.jl")
-include("../equations/heat.jl")
+include("../equations/equations.jl")
 
 function get_heat_batch(t_max, t_min, x_max, x_min, t_n, x_n, typ=-1, d=1., k=1.)
   t, u_s = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, typ, d, k)
@@ -32,12 +33,12 @@ function heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, typ=-1, d
   ]);
 
   u0 = copy(init[rand_init](t, x));
-  t, u = get_heat_fft(t, dx, x_n, d, u0[1, :])
+  t, u = Equations.get_heat_fft(t, dx, x_n, d, u0[1, :])
 
   if sum(isfinite.(u)) != prod(size(u))
     print("u matrix is not finite.")
-    u0 = copy(heat_analytical_init(t, x, collect(range(1, 51, step=1)), [], k))
-    t, u = get_heat_fft(t, dx, x_n, d, u0[1, :])
+    u0 = copy(InitialFunctions.heat_analytical_init(t, x, collect(range(1, 51, step=1)), [], k))
+    t, u = Equations.get_heat_fft(t, dx, x_n, d, u0[1, :])
   end
 
   return t, u
@@ -63,7 +64,7 @@ function downsampling(u, d)
 end
 
 
-function generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=256, typ=-1, d=1., k=1., filename="heat_training_set.pt", name)
+function generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=256, typ=-1, d=1., k=1., filename="heat_training_set.jld2", name="training_set")
   train_set = [];
   upscale = 4;
 
@@ -77,12 +78,12 @@ function generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=
     push!(train_set, item);
   end
 
-  save(filename, name, train_set);
+  JLD2.save(filename, name, train_set);
   return train_set
 end
 
 function read_dataset(filepath)
-  training_set = load(filepath)
+  training_set = JLD2.load(filepath)
   return training_set
 end
 
