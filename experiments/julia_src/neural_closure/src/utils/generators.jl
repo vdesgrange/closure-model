@@ -7,14 +7,15 @@ using Random
 
 include("../equations/initial_functions.jl")
 include("../equations/equations.jl")
+include("./processing_tools.jl")
 
 function get_heat_batch(t_max, t_min, x_max, x_min, t_n, x_n, typ=-1, d=1., k=1.)
   t, u_s = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, typ, d, k)
-  u0 = copy(u_s[1, :])
+  u0 = copy(u_s[:, 1])
   return t, u0, u_s
 end
 
-function heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, typ=-1, d=1, k=1)
+function heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, typ=0, d=1, k=1)
   dt = round((t_max - t_min) / (t_n - 1), digits=8);
   dx = round((x_max - x_min) / (x_n - 1), digits=8);
 
@@ -22,7 +23,7 @@ function heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, typ=-1, d
   x = LinRange(x_min, x_max, x_n);
 
   rand_init = rand((1, 2, 3));
-  if typ > -1
+  if typ > 0
     rand_init = typ
   end
 
@@ -44,34 +45,65 @@ function heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, typ=-1, d
   return t, u
 end
 
-function get_burgers_batch()
+function get_burgers_batch(t_max, t_min, x_max, x_min, t_n, x_n, nu, typ)
+  t, u_s = burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, typ, k)
+  u0 = copy(u_s[:, 1])
+  return t, u0, u_s
 end
 
-function burgers_snapshot_generator()
-end
+function burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, typ=0)
+  dt = round((t_max - t_min) / (t_n - 1), digits=8);
+  dx = round((x_max - x_min) / (x_n - 1), digits=8);
 
-function downsampling(u, d)
-  n, m = floor.(Int, size(u) ./ d)
-  d_u = zeros(n, m)
+  t = LinRange(t_min, t_max, t_n);
+  x = LinRange(x_min, x_max, x_n);
 
-  for i in range(0, n - 1, step=1)
-    for j in range(0, m - 1, step=1)
-      d_u[i+1, j+1] = mean(u[i*d + 1:(i + 1)*d, j*d + 1:(j + 1)*d])
-    end
+  rand_init = rand((1, 2));
+  if typ > 0
+    rand_init = typ;
   end
 
-  return d_u
+  init = Dict([
+    (1, InitialFunctions.random_init),
+    (2, InitialFunctions.high_dim_random_init),
+  ]);
+
+  u0 = copy(init[rand_init](t, x));
+  t, u = Equations.get_burgers_fft(t, dx, x_n, nu, u0[1, :])
+
+  if sum(isfinite.(u)) != prod(size(u))
+    print("u matrix is not finite.")
+  end
+
+  return t, u
 end
 
-
-function generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=256, typ=-1, d=1., k=1., filename="heat_training_set.jld2", name="training_set")
+function generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=64, typ=0, d=1., k=1., filename="heat_training_set.jld2", name="training_set")
   train_set = [];
   upscale = 4;
 
   for i in range(1, n, step=1)
     print("Item", i)
     high_t, high_dim = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n * upscale, x_n * upscale, typ, d, k);
-    low_dim = downsampling(high_dim, upscale);
+    low_dim = ProcessingTools.downsampling(high_dim, upscale);
+    low_t = LinRange(t_min, t_max, t_n);
+
+    item = [low_t, low_dim, high_t, high_dim];
+    push!(train_set, item);
+  end
+
+  JLD2.save(filename, name, train_set);
+  return train_set
+end
+
+function generate_burgers_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, nu, n=64, typ=0, filename="burgers_training_set.jld2", name="training_set")
+  train_set = [];
+  upscale = 64;
+
+  for i in range(1, n, step=1)
+    print("Item", i)
+    high_t, high_dim = burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n * upscale, x_n * upscale, nu, typ);
+    low_dim = ProcessingTools.downsampling(high_dim, upscale);
     low_t = LinRange(t_min, t_max, t_n);
 
     item = [low_t, low_dim, high_t, high_dim];
@@ -85,9 +117,6 @@ end
 function read_dataset(filepath)
   training_set = JLD2.load(filepath)
   return training_set
-end
-
-function process_dataset(dataset)
 end
 
 end
