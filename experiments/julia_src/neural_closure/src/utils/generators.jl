@@ -96,9 +96,8 @@ function generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=
   return train_set
 end
 
-function generate_burgers_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, nu, n=64, typ=0, filename="burgers_training_set.jld2", name="training_set")
+function generate_burgers_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, nu, n=64, typ=0, upscale=64, keep_high_dim=true, filename="burgers_training_set.jld2", name="training_set")
   train_set = [];
-  upscale = 64;
 
   for i in range(1, n, step=1)
     print("Item", i)
@@ -106,7 +105,11 @@ function generate_burgers_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n,
     low_dim = ProcessingTools.downsampling(high_dim, upscale);
     low_t = LinRange(t_min, t_max, t_n);
 
-    item = [low_t, low_dim, high_t, high_dim];
+    if keep_high_dim
+      item = [low_t, low_dim, high_t, high_dim];
+    else
+      item = [low_t, low_dim]
+    end
     push!(train_set, item);
   end
 
