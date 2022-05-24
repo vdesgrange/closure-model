@@ -16,18 +16,19 @@ function animate_plot(u, x)
 end
 
 function show_state(u, title, x="t", y="x")
-    heatmap(
+    pl = heatmap(
         u,
         aspect_ratio = :equal,
         # xlims = (1 / 2, size(u, 2) + 1 / 2),
         # ylims = (1 / 2, size(u, 1) + 1 / 2),
-    )
-    heatmap!(
+    );
+    heatmap!(pl,
         #xlabel = x,
         #ylabel = y,
         plot_title = title,
         dpi=200,
-    )
+    );
+    return pl
 end
 
 function show_err(a, title, x="x", y="t", lim=none, aspect=1)
