@@ -58,17 +58,18 @@ function analytical_heat_1d(t, x, n=[], c=[], k=1.)
   L = 1.
 
   if (size(c, 1) == 0)
-    d = Normal(0., 1.)
-    r = rand(d, size(n, 1))
-    c = r ./ n # n = range(1, n_max, step=1), 1 to avoid division by 0
+    c = randn(size(n, 1)) ./ n # n = range(1, n_max, step=1), 1 to avoid division by 0
   end
 
-  a = c' .* exp.(- k * (n' * pi / L).^2 .* t) * sqrt(2 / L)
-  b = sin.(n' .* x * pi / L)
-  u = a * b'
+  X(n, x) = sqrt(2 / L) * sin(pi * n * x / L);
+  u(x, t) = sum(c * exp(-k * (pi * n / L)^2 * t) * X(n, x) for (c, n) in zip(c, n))
+  return [u(b, a) for a in t, b in x];
 
-  return u
+  # a = c' .* exp.(- k * (n' * pi / L).^2 .* t) 
+  # b = sqrt(2 / L) * sin.(n' .* x * pi / L)
+  # return a * b'
 end
+
 
 function heat_analytical_init(t, x, n=[], c=[], k=1.)
   u0 = zeros(Float64, size(t, 1), size(x, 1))
