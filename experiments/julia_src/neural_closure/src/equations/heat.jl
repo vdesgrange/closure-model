@@ -6,8 +6,8 @@ using SparseArrays
 
 include("initial_functions.jl")
 
-function get_heat(t, x, n=[], c=[], k=1.)
-  return InitialFunctions.analytical_heat_1d(t, x, n, c, k)
+function get_heat(t, x, n=[], c=[], ka=1.)
+  return InitialFunctions.analytical_heat_1d(t, x, n, c, ka)
 end
 
 function get_heat_fd_impl(dt, dx, t_n, x_n, u0=none)

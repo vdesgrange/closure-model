@@ -15,7 +15,7 @@ function get_heat_batch(t_max, t_min, x_max, x_min, t_n, x_n, typ=-1, d=1., k=1.
   return t, u0, u_s
 end
 
-function heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, typ=1, d=1., k=1.)
+function heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, typ=1, ka=1., k=1.)
   dt = round((t_max - t_min) / (t_n - 1), digits=8);
   dx = round((x_max - x_min) / (x_n - 1), digits=8);
 
@@ -30,23 +30,28 @@ function heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, typ=1, d=
   init = Dict([
     (1, InitialFunctions.random_init),
     (2, InitialFunctions.high_dim_random_init),
-    (3, (a, b) -> InitialFunctions.heat_analytical_init(a, b, collect(range(1, 51, step=1)), [], k)),
+    (3, (a, b) -> InitialFunctions.heat_analytical_init(a, b, collect(1:50), [], k)),
+    (4, (a, b) -> InitialFunctions.analytical_heat_1d(a, b, collect(1:50), [], k)),
   ]);
 
   u0 = copy(init[rand_init](t, x));
-  t, u = Equations.get_heat_fft(t, dx, x_n, d, u0[1, :])
+  if (typ != 4)
+    t, u = Equations.get_heat_fft(t, dx, x_n, ka, u0[1, :]);
+  else
+    u = u0;
+  end
 
   if sum(isfinite.(u)) != prod(size(u))
     print("u matrix is not finite.")
     u0 = copy(InitialFunctions.heat_analytical_init(t, x, collect(range(1, 51, step=1)), [], k))
-    t, u = Equations.get_heat_fft(t, dx, x_n, d, u0[1, :])
+    t, u = Equations.get_heat_fft(t, dx, x_n, ka, u0[1, :])
   end
 
   return t, u
 end
 
 function get_burgers_batch(t_max, t_min, x_max, x_min, t_n, x_n, nu, typ)
-  t, u_s = burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, typ, k)
+  t, u_s = burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, typk)
   u0 = copy(u_s[:, 1])
   return t, u0, u_s
 end
@@ -78,13 +83,13 @@ function burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, ty
   return t, u
 end
 
-function generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=64, typ=0, d=1., k=1., filename="heat_training_set.jld2", name="training_set")
+function generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=64, typ=1, ka=1., k=1., filename="heat_training_set.jld2", name="training_set")
   train_set = [];
   upscale = 4;
 
   for i in range(1, n, step=1)
     print("Item", i)
-    high_t, high_dim = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n * upscale, x_n * upscale, typ, d, k);
+    high_t, high_dim = heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n * upscale, x_n * upscale, typ, ka, k);
     low_dim = ProcessingTools.downsampling(high_dim, upscale);
     low_t = LinRange(t_min, t_max, t_n);
 

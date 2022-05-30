@@ -54,16 +54,18 @@ function burgers_analytical_init(t, x, nu)
   return u0
 end
 
-function analytical_heat_1d(t, x, n=[], c=[], k=1.)
+function analytical_heat_1d(t, x, n=[], c=[], ka=1.)
   L = 1.
+  x_min = x[1]
+  N = size(n, 1)
 
   if (size(c, 1) == 0)
-    c = randn(size(n, 1)) ./ n # n = range(1, n_max, step=1), 1 to avoid division by 0
+    c = randn(N) ./ n # n = range(1, n_max, step=1), 1 to avoid division by 0
   end
 
-  X(n, x) = sqrt(2 / L) * sin(pi * n * x / L);
-  u(x, t) = sum(c * exp(-k * (pi * n / L)^2 * t) * X(n, x) for (c, n) in zip(c, n))
-  return [u(b, a) for a in t, b in x];
+  X(n, x) = sqrt(2 / L) * sin(pi * n * (x - x_min) / L);
+  u(x, t) = sum(c * exp(-ka * (pi * n / L)^2 * t) * X(n, x) for (c, n) in zip(c, n))
+  return [u(a, b) for a in x, b in t];
 
   # a = c' .* exp.(- k * (n' * pi / L).^2 .* t) 
   # b = sqrt(2 / L) * sin.(n' .* x * pi / L)
@@ -74,7 +76,7 @@ end
 function heat_analytical_init(t, x, n=[], c=[], k=1.)
   u0 = zeros(Float64, size(t, 1), size(x, 1))
   u = analytical_heat_1d([t[1]], x, n, c, k)
-  u0[1, :] = copy(u[1, :])
+  u0[1, :] = copy(u[:, 1])
   u0[:, 1] .= 0
   u0[:, end] .= 0
 
