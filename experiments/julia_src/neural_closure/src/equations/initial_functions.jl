@@ -34,12 +34,12 @@ function high_dim_random_init(t, x, m=48)
   nu = rand(d, 2 * m)
   s = [nu[2 * k] * sin.(k * x) + nu[2 * k - 1] * cos.(k * x) for k in range(1, m, step=1)]
 
-  u = zeros(Float64, size(t, 1), size(x, 1))
-  u[1, :] .= (1 / sqrt(m)) * sum(s)
-  u[:, 1] .= 0
-  u[:, end] .= 0
+  u0 = zeros(Float64, size(t, 1), size(x, 1))
+  u0[1, :] .= (1 / sqrt(m)) .* sum(s)
+  u0[:, 1] .= 0
+  u0[:, end] .= 0
 
-  return u
+  return u0
 end
 
 function analytical_burgers_1d(t, x, nu)
@@ -73,9 +73,9 @@ function analytical_heat_1d(t, x, n=[], c=[], ka=1.)
 end
 
 
-function heat_analytical_init(t, x, n=[], c=[], k=1.)
+function heat_analytical_init(t, x, n=[], c=[], ka=1.)
   u0 = zeros(Float64, size(t, 1), size(x, 1))
-  u = analytical_heat_1d([t[1]], x, n, c, k)
+  u = analytical_heat_1d([t[1]], x, n, c, ka)
   u0[1, :] = copy(u[:, 1])
   u0[:, 1] .= 0
   u0[:, end] .= 0
