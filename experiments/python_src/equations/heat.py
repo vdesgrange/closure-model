@@ -132,7 +132,6 @@ def get_heat_fd_impl(dt, dx, t_n, x_n, u0=None):
 
 def get_heat_fft(t, dx, x_n, d=1, u0=None, method="LSODA"):
     k = 2 * np.pi * np.fft.fftfreq(x_n, d=dx)
-    print(k)
 
     def heat_pde(t, u, k, d): # t, u for odeint, u,t for solve_ivp
         # FFT - Fourier domain
