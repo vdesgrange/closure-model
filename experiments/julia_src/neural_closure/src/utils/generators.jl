@@ -16,8 +16,10 @@ function get_heat_batch(t_max, t_min, x_max, x_min, t_n, x_n, typ=-1, d=1., k=1.
 end
 
 function heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, typ=1, ka=1., k=1.)
-  dt = round((t_max - t_min) / (t_n - 1), digits=8);
-  dx = round((x_max - x_min) / (x_n - 1), digits=8);
+  # dt = round((t_max - t_min) / (t_n - 1), digits=8);
+  # dx = round((x_max - x_min) / (x_n - 1), digits=8);
+  dt = (t_max - t_min) / (t_n - 1);
+  dx = (x_max - x_min) / (x_n - 1);
 
   t = LinRange(t_min, t_max, t_n);
   x = LinRange(x_min, x_max, x_n);
@@ -30,8 +32,8 @@ function heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, typ=1, ka
   init = Dict([
     (1, InitialFunctions.random_init),
     (2, InitialFunctions.high_dim_random_init),
-    (3, (a, b) -> InitialFunctions.heat_analytical_init(a, b, collect(1:50), [], ka)),
-    (4, (a, b) -> InitialFunctions.analytical_heat_1d(a, b, collect(1:50), [], ka)),
+    (3, (a, b) -> InitialFunctions.heat_analytical_init(a, b, 1:50, [], ka)),
+    (4, (a, b) -> InitialFunctions.analytical_heat_1d(a, b, 1:50, [], ka)),
   ]);
 
   u0 = copy(init[rand_init](t, x));

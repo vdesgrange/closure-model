@@ -31,7 +31,19 @@ function show_state(u, title, x="t", y="x")
     return pl
 end
 
-function show_err(a, title, x="x", y="t", lim=none, aspect=1)
+function show_err(a, b, title, x="x", y="t")
+    pl = heatmap(
+        a .- b,
+        aspect_ratio = :equal,
+    );
+    heatmap!(pl,
+        c = :devon,
+        ylabel = y,
+        xlabel = x,
+        plot_title = title,
+        dpi=200,
+    );
+    return pl
 end
 
 function domain_curve(k, v, L)

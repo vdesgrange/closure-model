@@ -29,14 +29,14 @@ function process_dataset(dataset, keep_high_dim=true)
       t, u = dataset[i];
     end
 
-    push!(init_set, u[:, 1]); # make copies ?
-    push!(true_set, u); # make copies ?
+    push!(init_set, copy(u[:, 1])); # make copies ?
+    push!(true_set, copy(u)); # make copies ?
   end
 
   t_n = size(t, 1)
   x_n = size(init_set[1], 1)
 
-  return t, hcat(init_set...), permutedims(reshape(hcat(true_set...), :, x_n, t_n), (2, 1, 3));
+  return t, hcat(init_set...), permutedims(reshape(hcat(true_set...), x_n, t_n, :), (1, 3, 2));
 end
 
 end
