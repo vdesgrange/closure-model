@@ -27,6 +27,7 @@ function show_state(u, title, x="t", y="x")
         #ylabel = y,
         plot_title = title,
         dpi=200,
+        reuse=false,
     );
     return pl
 end
