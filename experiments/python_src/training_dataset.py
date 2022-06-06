@@ -15,7 +15,7 @@ def generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=256, 
         low_t = np.linspace(t_min, t_max, t_n)
 
         batch_low_t = torch.from_numpy(low_t).float()
-        batch_low_dim = torch.from_numpy(low_dim).float()
+        batch_low_dim = torch.tensor(torch.from_numpy(low_dim).float().clone().detach(), requires_grad=True)
         batch_high_t = torch.from_numpy(t).float()
         batch_high_dim = torch.from_numpy(high_dim).float()
 
