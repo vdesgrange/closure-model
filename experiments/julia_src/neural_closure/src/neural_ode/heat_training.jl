@@ -1,4 +1,4 @@
-module Training
+module HeatTraining
 
 using DiffEqFlux
 using OrdinaryDiffEq
@@ -16,7 +16,7 @@ function S(net, u0, t)
   sol = solve(prob, Tsit5(), saveat=t, reltol=1e-8, abstol=1e-8)
 end
 
-function heat_training_with_solver(K, epochs, u0, u_true, tsnap)
+function training_with_solver(K, epochs, u0, u_true, tsnap)
   optimizer = DiffEqFlux.ADAM(0.01, (0.9, 0.999), 1.0e-8)
 
   callback(theta, loss, u) = (display(loss); false)
@@ -30,5 +30,6 @@ function heat_training_with_solver(K, epochs, u0, u_true, tsnap)
   result = DiffEqFlux.sciml_train(loss, K, optimize; cb = callback, maxiters = epochs);
   return result
 end
+
 
 end
