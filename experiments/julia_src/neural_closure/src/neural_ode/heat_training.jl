@@ -2,6 +2,7 @@ module HeatTraining
 
 using DiffEqFlux
 using OrdinaryDiffEq
+using DifferentialEquations
 
 include("objectives.jl")
 include("models.jl")
