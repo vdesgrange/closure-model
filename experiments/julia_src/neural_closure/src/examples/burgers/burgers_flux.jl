@@ -1,4 +1,4 @@
-module BurgersFluxTraining
+module BurgersTraining
 
 using CUDA
 using BSON: @save
@@ -15,7 +15,6 @@ include("../../utils/generators.jl")
 include("../../utils/processing_tools.jl")
 include("../../utils/graphic_tools.jl")
 include("../../neural_ode/models.jl")
-include("../../neural_ode/training.jl")
 
 function check_result(nn, res, typ)
     t, u0, u = Generator.get_burgers_batch(0.2, 0., 1., 0., 64, 64, 0.01, typ);
@@ -53,15 +52,46 @@ function training(model, epochs, dataset, batch_size, ratio)
   @info("Loading dataset")
   (train_loader, val_loader) = get_data_loader(dataset, batch_size, ratio);
 
-  lossfn = (x, y) -> Flux.mse(x, permutedims(y, (1, 3, 2)));
-
   @info("Building model")
-  learner = FluxTraining.Learner(model, lossfn; callbacks=[FluxTraining.Metrics(Flux.mse)], optimizer=opt);
+  p, re = Flux.destructure(model);
+  net(u, p, t) = re(p)(u);
+
+  prob = ODEProblem{false}(net, Nothing, (Nothing, Nothing));
+
+  function predict_neural_ode(x, t)
+      tspan = (t[1], t[end]);
+      _prob = remake(prob; u0=x, p=p, tspan=tspan);
+      Array(solve(_prob, Tsit5(), u0=x, p=p, saveat=t));
+  end
+
+  function loss(x, y, t)
+      u_pred = predict_neural_ode(x, t[1]);
+      l = Flux.mse(u_pred, permutedims(y, (1, 3, 2)));
+      return l;
+  end
+
+  function traincb()
+      ltrain = 0;
+      for (x, y, t) in train_loader
+           ltrain += loss(x, y, t);
+      end
+      ltrain /= (train_loader.nobs / train_loader.batchsize);
+      @show(ltrain);
+  end
+
+  function evalcb()
+      lval = 0;
+      for (x, y, t) in val_loader
+           lval += loss(x, y, t);
+      end
+      lval /= (val_loader.nobs / val_loader.batchsize);
+      @show(lval);
+  end
 
   @info("Train")
-  ODETraining.fit!(learner, epochs, (train_loader, val_loader));
+  Flux.@epochs epochs Flux.train!(loss, Flux.params(p), train_loader, opt, cb = [traincb, evalcb]);
 
-  return learner.model, learner.params;
+  return model, p
 end
 
 function __init__()
@@ -75,7 +105,7 @@ function main()
   # t_n = 64;
   x_n = 64;
   batch_size = 32;
-  epochs = 2;
+  epochs = 100;
 
   high_dataset = Generator.read_dataset("./dataset/burgers_high_dim_training_set.jld2")["training_set"];
   model = Models.BasicAutoEncoder(x_n);

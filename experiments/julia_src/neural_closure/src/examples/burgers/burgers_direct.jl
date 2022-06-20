@@ -1,4 +1,4 @@
-module BurgersFluxTraining
+module BurgersDirect
 
 using CUDA
 using BSON: @save
@@ -9,7 +9,6 @@ using OrdinaryDiffEq
 using DiffEqFlux
 using GalacticOptim
 using MLUtils
-using IterTools: ncycle
 
 include("../../utils/generators.jl")
 include("../../utils/processing_tools.jl")
@@ -31,9 +30,8 @@ function check_result(nn, res, typ)
 end
 
 function get_data_loader(dataset, batch_size, ratio)
-  t, init_set, true_set = ProcessingTools.process_dataset(dataset, false);
+  _, init_set, true_set = ProcessingTools.process_dataset(dataset, false);
 
-  t_train, t_val = splitobs(t, at = ratio);
   train_set, val_set = splitobs(true_set, at = ratio);
   init_train = copy(init_set);
   init_val = copy(val_set[:, :, 1]);
@@ -41,8 +39,8 @@ function get_data_loader(dataset, batch_size, ratio)
   switch_train_set = permutedims(train_set, (1, 3, 2));
   switch_val_set = permutedims(val_set, (1, 3, 2));
 
-  train_loader = DataLoader((init_train, switch_train_set, collect(ncycle([collect(t_train)], batch_size))), batchsize=batch_size, shuffle=false);
-  val_loader = DataLoader((init_val, switch_val_set, collect(ncycle([collect(t_val)], batch_size))), batchsize=batch_size, shuffle=false);
+  train_loader = DataLoader((init_train, switch_train_set), batchsize=batch_size, shuffle=false);
+  val_loader = DataLoader((init_val, switch_val_set), batchsize=batch_size, shuffle=false);
 
   return (train_loader, val_loader)
 end
@@ -53,18 +51,15 @@ function training(model, epochs, dataset, batch_size, ratio)
   @info("Loading dataset")
   (train_loader, val_loader) = get_data_loader(dataset, batch_size, ratio);
 
-  lossfn = (x, y) -> Flux.mse(x, permutedims(y, (1, 3, 2)));
+  lossfn = Flux.mse
 
   @info("Building model")
   learner = FluxTraining.Learner(model, lossfn; callbacks=[FluxTraining.Metrics(Flux.mse)], optimizer=opt);
 
   @info("Train")
-  ODETraining.fit!(learner, epochs, (train_loader, val_loader));
+  Training.fit!(learner, epochs, (train_loader, val_loader));
 
   return learner.model, learner.params;
-end
-
-function __init__()
 end
 
 function main()
