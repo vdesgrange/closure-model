@@ -54,6 +54,16 @@ function burgers_analytical_init(t, x, nu)
   return u0
 end
 
+function advecting_shock(t, x, nu)
+  Re = 1. / nu;
+  t0 = exp(Re / 8);
+
+  u0 = zeros(Float64, size(t, 1), size(x, 1));
+  u0[1, :] .= x ./ (1 + sqrt(1. / t0) * exp(Re * (x.^2 / 4)));
+  u0[:, 1] .= 0
+  u0[:, end] .= 0
+end
+
 function analytical_heat_1d(t, x, n=[], c=[], ka=1.)
   L = 1.
   x_min = x[1]
