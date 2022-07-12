@@ -34,8 +34,9 @@ end
 
 function show_err(a, b, title, x="x", y="t")
     pl = heatmap(
-        a .- b,
+        abs.(a .- b),
         aspect_ratio = :equal,
+        c = :dense,
     );
     heatmap!(pl,
         c = :devon,
