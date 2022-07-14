@@ -12,6 +12,16 @@ function simple_plotter(ks, title="Simple plot", L=1.)
   end
 end
 
+function plot_regularization(noise, reg, a, b, c, d)
+    plot(dpi=200)
+    plot!(reg, a, markershape=:x, label="Interpolation")
+    plot!(reg, b, markershape=:x, label="Full")
+    plot!(reg, c, markershape=:x, label="Training")
+    plot!(reg, d, markershape=:x, label="Validation")
+    plot!(xlabel="Regularization", ylabel="Cost", xaxis=:log)
+    plot!(xticks=(reg,["1e-12", "1e-10", "1e-8", "1e-6", "1e-5", "1e-4", "1e-3", "1e-2", "1e-1"]))
+end
+
 function animate_plot(u, x)
 end
 

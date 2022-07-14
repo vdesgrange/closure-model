@@ -14,6 +14,7 @@ include("../../utils/graphic_tools.jl")
 include("../../utils/processing_tools.jl")
 include("../../neural_ode/objectives.jl")
 include("../../neural_ode/models.jl")
+include("../../neural_ode/regularization.jl")
 
 
 function check_result(nn, res, typ)
@@ -40,40 +41,16 @@ function get_data_loader(dataset, batch_size, ratio)
   switch_train_set = permutedims(train_set, (1, 3, 2));
   switch_val_set = permutedims(val_set, (1, 3, 2));
 
-  train_loader = DataLoader((init_train, switch_train_set, collect(ncycle([collect(t_train)], batch_size))), batchsize=batch_size, shuffle=false);
+  train_loader = DataLoader((init_train, switch_train_set, collect(ncycle([collect(t_train)], batch_size))), batchsize=batch_size, shuffle=true);
   val_loader = DataLoader((init_val, switch_val_set, collect(ncycle([collect(t_val)], batch_size))), batchsize=batch_size, shuffle=false);
 
   return (train_loader, val_loader)
 end
 
-function f(u, K, t)
-  return K * u
-end
-
-function S(net, u0, t)
-  tspan = (t[1], t[end])
-  prob = ODEProblem(ODEFunction(f), copy(u0), tspan, net)
-  sol = solve(prob, Tsit5(), saveat=t, reltol=1e-8, abstol=1e-8)
-end
-
-function training_with_solver(K, epochs, u0, u_true, tsnap)
-  optimizer = DiffEqFlux.ADAM(0.01, (0.9, 0.999), 1.0e-8)
-
-  callback(theta, loss, u) = (display(loss); false)
-
-  function loss(K)
-    u_pred = Array(S(K, u0, tsnap))
-    l = Objectives.mseloss(u_pred, u_true)
-    return l
-  end
-
-  result = DiffEqFlux.sciml_train(loss, K, optimize; cb = callback, maxiters = epochs);
-  return result
-end
-
-
-function training(model, epochs, dataset, batch_size, ratio)
+function training(model, epochs, dataset, batch_size, ratio, noise=0., reg=0.)
   opt = Flux.ADAM(0.01, (0.9, 0.999), 1.0e-8);
+  ltrain = 0.;
+  losses = [];
 
   @info("Loading dataset")
   (train_loader, val_loader) = get_data_loader(dataset, batch_size, ratio);
@@ -92,7 +69,8 @@ function training(model, epochs, dataset, batch_size, ratio)
 
   function loss(x, y, t)
       u_pred = predict_neural_ode(x, t[1]);
-      l = Flux.mse(u_pred, permutedims(y, (1, 3, 2)));
+      ŷ = Reg.gaussian_augment(u_pred, noise);
+      l = Flux.mse(ŷ, permutedims(y, (1, 3, 2))) + Reg.l2(p, reg); # 1e-5
       return l;
   end
 
@@ -105,40 +83,46 @@ function training(model, epochs, dataset, batch_size, ratio)
       @show(ltrain);
   end
 
+    
+  function val_loss(x, y, t)
+      u_pred = predict_neural_ode(x, t[1]);
+      ŷ = u_pred
+      l = Flux.mse(ŷ, permutedims(y, (1, 3, 2)))
+      return l;
+  end
+    
   function evalcb()
       lval = 0;
       for (x, y, t) in val_loader
-           lval += loss(x, y, t);
+           lval += val_loss(x, y, t);
       end
       lval /= (val_loader.nobs / val_loader.batchsize);
       @show(lval);
   end
 
   @info("Train")
-  Flux.@epochs epochs Flux.train!(loss, Flux.params(p), train_loader, opt, cb = [traincb, evalcb]);
+  trigger = Flux.plateau(() -> ltrain, 20; init_score = 1, min_dist = 1f-5);
+  Flux.@epochs epochs begin
+        Flux.train!(loss, Flux.params(p), train_loader, opt, cb = [traincb, evalcb]);
+        trigger() && break;
+  end
 
-  return model, p
+  return re(p), p
 end
 
 function main()
-  # t_max = 1.;
-  # t_min = 0.;
-  # x_max = 1.;
-  # x_min = 0.;
-  # t_n = 64;
-  # kappa = 0.005;
-  # k = 1.;
   x_n = 64;
   batch_size = 128;
   epochs = 1000;
 
-  high_dataset = Generator.read_dataset("./examples/heat/heat_high_dim_training_set.jld2")["training_set"];
+  data = Generator.read_dataset("./src/examples/heat/odesolver_analytical_heat_training_set.jld2")["training_set"];
   model = Models.LinearModel(x_n);
-  K, p = training(model, epochs, high_dataset, batch_size, 0.5);
-  # @save "HeatLinearModel.bson" cpu(neural_operator)
-
-  check_result(K, p, 2)
+  K, p = training(model, epochs, data, batch_size, 0.7);
+  # @save "HeatLinearModel.bson" K
+  # check_result(K, p, 2)
   return K, p
 end
+
+K, p = main()
 
 end

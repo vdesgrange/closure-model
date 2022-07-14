@@ -85,9 +85,8 @@ function burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, ty
   return t, u
 end
 
-function generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=64, typ=1, ka=1., k=1., filename="heat_training_set.jld2", name="training_set")
+function generate_heat_training_dataset(t_max, t_min, x_max, x_min, t_n, x_n, n=64, typ=1, ka=1., k=1., filename="heat_training_set.jld2", name="training_set", upscale=1)
   train_set = [];
-  upscale = 1;
 
   for i in range(1, n, step=1)
     print("Item", i)
