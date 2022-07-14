@@ -1,2 +1,7 @@
+.DS_Store
+**/*/.DS_Store
+**/*/.ipynb_checkpoints
 experiments/python_src/.ipynb_checkpoints/
 experiments/python_src/dataset/
+**/*.jld2
+**/*.bson
