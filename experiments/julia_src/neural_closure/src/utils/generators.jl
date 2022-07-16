@@ -16,8 +16,6 @@ function get_heat_batch(t_max, t_min, x_max, x_min, t_n, x_n, typ=-1, d=1., k=1.
 end
 
 function heat_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, typ=1, ka=1., k=1.)
-  # dt = round((t_max - t_min) / (t_n - 1), digits=8);
-  # dx = round((x_max - x_min) / (x_n - 1), digits=8);
   dt = (t_max - t_min) / (t_n - 1);
   dx = (x_max - x_min) / (x_n - 1);
 

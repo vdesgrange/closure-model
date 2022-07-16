@@ -3,6 +3,8 @@ using AbstractFFTs
 using OrdinaryDiffEq
 using SuiteSparse
 using SparseArrays
+using Statistics
+
 
 function get_burgers_fft(t, dx, x_n, nu, u0)
   k = 2 * pi * AbstractFFTs.fftfreq(x_n, 1. / dx) # Sampling rate, inverse of sample spacing
@@ -26,4 +28,17 @@ function get_burgers_fft(t, dx, x_n, nu, u0)
   sol = solve(prob, Tsit5(), saveat=t, reltol=1e-8, abstol=1e-8)
 
   return sol.t, hcat(sol.u...)
+end
+
+function galerkin_projection(S, Φ, A, substract_mean::Bool = false)
+  if substract_mean
+    S .-= mean(S, dim=1);
+  end
+
+  function N(u)
+  end
+
+  function L(u)
+  end
+
 end
