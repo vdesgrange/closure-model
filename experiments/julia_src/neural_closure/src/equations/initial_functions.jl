@@ -76,10 +76,6 @@ function analytical_heat_1d(t, x, n=[], c=[], ka=1.)
   X(n, x) = sqrt(2 / L) * sin(pi * n * (x - x_min) / L);
   u(x, t) = sum(c * exp(-ka * (pi * n / L)^2 * t) * X(n, x) for (c, n) in zip(c, n))
   return [u(a, b) for a in x, b in t];
-
-  # a = c' .* exp.(- k * (n' * pi / L).^2 .* t) 
-  # b = sqrt(2 / L) * sin.(n' .* x * pi / L)
-  # return a * b'
 end
 
 

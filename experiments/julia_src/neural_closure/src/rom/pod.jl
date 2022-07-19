@@ -8,11 +8,12 @@ struct Basis{T}
   coefficients::Matrix{T}
 end
 
-function generate_pod_basis(S, substract_mean::Bool = false)
-  n = size(S, 2)
+function generate_pod_basis(M, substract_mean::Bool = false)
+  n = size(M, 2)
+  S = copy(M);
 
   if substract_mean
-    S .-= mean(S, dim=1);
+    S .-= mean(S, dims=2);
   end
 
   C = S'S;
@@ -25,7 +26,7 @@ function generate_pod_basis(S, substract_mean::Bool = false)
   W = W[:, idx]
 
   D = sqrt.(abs.(λ))
-  θ = S * W * Diagonal(1 ./ D) # Modes
+  θ = real(S * W) * Diagonal(1 ./ D) # Modes
   A = θ' * S # Coefficients
 
   return Basis(θ, A)
