@@ -5,6 +5,8 @@ using SuiteSparse
 using SparseArrays
 using Statistics
 
+function weno5()
+end
 
 function get_burgers_fft(t, dx, x_n, nu, u0)
   """
@@ -29,7 +31,7 @@ function get_burgers_fft(t, dx, x_n, nu, u0)
 
   tspan = (t[1], t[end])
   prob = ODEProblem(ODEFunction(f), copy(u0), tspan, (k, nu))
-  sol = solve(prob, Tsit5(), saveat=t, reltol=1e-8, abstol=1e-8)
+  sol = solve(prob, AutoTsit5(Rosenbrock23()), saveat=t, reltol=1e-8, abstol=1e-8)
 
   return sol.t, hcat(sol.u...)
 end

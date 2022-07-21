@@ -70,7 +70,7 @@ function burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, ty
 
   init = Dict([
     (1, InitialFunctions.random_init),
-    (2, InitialFunctions.high_dim_random_init),
+    (2, (a, b) -> InitialFunctions.high_dim_random_init(a, b, 28)),
   ]);
 
   u0 = copy(init[rand_init](t, x));

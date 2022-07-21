@@ -1,6 +1,6 @@
 module InitialFunctions
 
-export random_init, high_dim_random_init, burgers_analytical_init, heat_analytical_init
+export gaussian_init, random_init, high_dim_random_init, burgers_analytical_init, heat_analytical_init
 
 using Revise
 using LinearAlgebra
@@ -29,7 +29,7 @@ function random_init(t, x)
   return u
 end
 
-function high_dim_random_init(t, x, m=48)
+function high_dim_random_init(t, x, m=28)
   d = Normal(0., 1.)
   nu = rand(d, 2 * m)
   s = [nu[2 * k] * sin.(k * x) + nu[2 * k - 1] * cos.(k * x) for k in range(1, m, step=1)]
