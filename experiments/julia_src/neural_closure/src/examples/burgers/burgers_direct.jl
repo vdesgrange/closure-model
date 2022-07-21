@@ -9,16 +9,18 @@ using OrdinaryDiffEq
 using DiffEqFlux
 using GalacticOptim
 using MLUtils
+using IterTools: ncycle
 
 include("../../utils/generators.jl")
 include("../../utils/processing_tools.jl")
 include("../../utils/graphic_tools.jl")
 include("../../neural_ode/models.jl")
+include("../../neural_ode/regularization.jl")
 include("../../neural_ode/training.jl")
 
 function check_result(nn, res, typ)
-    t, u0, u = Generator.get_burgers_batch(0.2, 0., 1., 0., 64, 64, 0.01, typ);
-    prob_neuralode = DiffEqFlux.NeuralODE(nn, (t[1], t[end]), Tsit5(), saveat=t);
+    t, u0, u = Generator.get_burgers_batch(0.5, 0., pi, 0., 64, 64, 0.03, typ);
+    prob_neuralode = DiffEqFlux.NeuralODE(nn, (t[1], t[end]), AutoTsit5(Rosenbrock23()), saveat=t);
     u_pred = prob_neuralode(u0, res);
 
     plot(
@@ -27,11 +29,14 @@ function check_result(nn, res, typ)
         GraphicTools.show_err(hcat(u_pred.u...), u, "");
         layout = (1, 3),
     )
+    savefig("burgers_direct_results.png");
 end
 
 function get_data_loader(dataset, batch_size, ratio)
-  _, init_set, true_set = ProcessingTools.process_dataset(dataset, false);
+  n = size(dataset, 1)
+  t, init_set, true_set = ProcessingTools.process_dataset(dataset, false);
 
+  t_train, t_val = splitobs(t, at = ratio);
   train_set, val_set = splitobs(true_set, at = ratio);
   init_train = copy(init_set);
   init_val = copy(val_set[:, :, 1]);
@@ -39,46 +44,102 @@ function get_data_loader(dataset, batch_size, ratio)
   switch_train_set = permutedims(train_set, (1, 3, 2));
   switch_val_set = permutedims(val_set, (1, 3, 2));
 
-  train_loader = DataLoader((init_train, switch_train_set), batchsize=batch_size, shuffle=false);
-  val_loader = DataLoader((init_val, switch_val_set), batchsize=batch_size, shuffle=false);
+  train_data = (init_train, switch_train_set, collect(ncycle([collect(t_train)], n)))
+  val_data = (init_val, switch_val_set,  collect(ncycle([collect(t_val)], n))) #  hcat(repeat([collect(t_val)], n)...)
+
+  train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true);
+  val_loader = DataLoader(val_data, batchsize=batch_size, shuffle=false);
 
   return (train_loader, val_loader)
 end
 
-function training(model, epochs, dataset, batch_size, ratio)
-  opt = Flux.ADAM(0.01, (0.9, 0.999), 1.0e-8);
+function training(model, epochs, dataset, batch_size, ratio, noise=0., reg=0., cuda=false)
+   if cuda && CUDA.has_cuda()
+      device = Flux.gpu
+      CUDA.allowscalar(false)
+      @info "Training on GPU"
+  else
+      device = Flux.cpu
+      @info "Training on CPU"
+  end
+
+  opt = Flux.Optimiser(Flux.WeightDecay(reg), Flux.ADAM(0.01, (0.9, 0.999), 1.0e-8))
+  ltrain = 0.;
+  lval = 0.;
+  losses = [];
 
   @info("Loading dataset")
   (train_loader, val_loader) = get_data_loader(dataset, batch_size, ratio);
 
-  lossfn = Flux.mse
-
   @info("Building model")
-  learner = FluxTraining.Learner(model, lossfn; callbacks=[FluxTraining.Metrics(Flux.mse)], optimizer=opt);
+  p, re = Flux.destructure(model);
+  net(u, p, t) = re(p)(u);
+
+  prob = ODEProblem{false}(net, Nothing, (Nothing, Nothing));
+
+  function predict_neural_ode(x, t)
+    tspan = (t[1], t[end]);
+    _prob = remake(prob; u0=x, p=p, tspan=tspan);
+    Array(solve(_prob, AutoTsit5(Rosenbrock23()), u0=x, p=p, saveat=t));
+  end
+
+  function loss(x, y, t)
+    u_pred = predict_neural_ode(x, t[1]);
+    ŷ = Reg.gaussian_augment(u_pred, noise);
+    l = Flux.mse(ŷ, permutedims(y, (1, 3, 2))) # + Reg.l2(p, reg);
+    return l;
+  end
+
+  function traincb()
+    ltrain = 0;
+    for (x, y, t) in train_loader
+      (x, y, t) = (x, y, t) |> device;
+      ltrain += loss(x, y, t);
+    end
+    ltrain /= (train_loader.nobs / train_loader.batchsize);
+    @show(ltrain);
+  end
+
+  function val_loss(x, y, t)
+    u_pred = predict_neural_ode(x, t[1]);
+    ŷ = u_pred;
+    l = Flux.mse(ŷ, permutedims(y, (1, 3, 2)))
+    return l;
+  end
+
+  function evalcb()
+    lval = 0;
+    for (x, y, t) in val_loader
+      (x, y, t) = (x, y, t) |> device;
+      lval += val_loss(x, y, t);
+    end
+    lval /= (val_loader.nobs / val_loader.batchsize);
+    @show(lval);
+  end
 
   @info("Train")
-  Training.fit!(learner, epochs, (train_loader, val_loader));
+  trigger = Flux.plateau(() -> ltrain, 20; init_score = 1, min_dist = 1f-5);
+  Flux.@epochs epochs begin
+    Flux.train!(loss, Flux.params(p), train_loader, opt, cb = [traincb, evalcb]);
+    trigger() && break;
+  end
 
-  return learner.model, learner.params;
+  return re(p), p, ltrain, lval
 end
 
 function main()
-  # t_max = 0.2;
-  # t_min = 0.;
-  # x_max = 1.;
-  # x_min = 0.;
-  # t_n = 64;
   x_n = 64;
-  batch_size = 32;
-  epochs = 2;
+  batch_size = 128;
+  epochs = 10;
 
-  high_dataset = Generator.read_dataset("./dataset/burgers_high_dim_training_set.jld2")["training_set"];
+  data = Generator.read_dataset("./dataset/burgers_high_dim_training_set.jld2")["training_set"];
   model = Models.BasicAutoEncoder(x_n);
-  neural_operator, p = training(model, epochs, high_dataset, batch_size, 0.5);
-  # @save "LinearModel.bson" cpu(neural_operator)
+  K, p, _, _ = training(model, epochs, data, batch_size, 0.5, 0., 0., true);
+  # @save "./models/BurgersLinearModel.bson" K
 
-  check_result(neural_operator, p, 2)
+  check_result(K, p, 2)
+
+  return K, p
 end
-
 
 end

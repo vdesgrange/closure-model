@@ -26,7 +26,6 @@ function FastBasicAutoEncoder(x_n)
   )
 end
 
-
 function LinearModel(x_n)
   return Flux.Chain(
     Flux.Dense(x_n, x_n, identity; bias=false, init=Flux.zeros32)
