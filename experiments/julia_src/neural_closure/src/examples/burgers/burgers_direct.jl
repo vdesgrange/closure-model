@@ -32,35 +32,6 @@ function check_result(nn, res, typ)
     savefig("burgers_direct_results.png");
 end
 
-function get_data_loader(dataset, batch_size, ratio)
-   if cuda && CUDA.has_cuda()
-      device = Flux.gpu
-      CUDA.allowscalar(false)
-      @info "Training on GPU"
-  else
-      device = Flux.cpu
-      @info "Training on CPU"
-
-  n = size(dataset, 1)
-  t, init_set, true_set = ProcessingTools.process_dataset(dataset, false);
-
-  t_train, t_val = splitobs(t, at = ratio);
-  train_set, val_set = splitobs(true_set, at = ratio);
-  init_train = copy(init_set);
-  init_val = copy(val_set[:, :, 1]);
-
-  switch_train_set = permutedims(train_set, (1, 3, 2));
-  switch_val_set = permutedims(val_set, (1, 3, 2));
-
-  train_data = (init_train |> device, switch_train_set |> device, collect(ncycle([collect(t_train)], n)) |> device)
-  val_data = (init_val |> device, switch_val_set |> device,  collect(ncycle([collect(t_val)], n)) |> device) #  hcat(repeat([collect(t_val)], n)...)
-
-  train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true);
-  val_loader = DataLoader(val_data, batchsize=batch_size, shuffle=false);
-
-  return (train_loader, val_loader)
-end
-
 function training(model, epochs, dataset, batch_size, ratio, noise=0., reg=0., cuda=false)
    if cuda && CUDA.has_cuda()
       device = Flux.gpu
@@ -78,7 +49,7 @@ function training(model, epochs, dataset, batch_size, ratio, noise=0., reg=0., c
   losses = [];
 
   @info("Loading dataset")
-  (train_loader, val_loader) = get_data_loader(dataset, batch_size, ratio);
+  (train_loader, val_loader) = ProcessingTools.get_data_loader(dataset, batch_size, ratio);
 
   @info("Building model")
   p, re = Flux.destructure(model);
