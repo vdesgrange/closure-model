@@ -17,7 +17,7 @@ include("../../neural_ode/regularization.jl")
 include("../../neural_ode/training.jl")
 include("./analysis.jl")
 
-function training(model, epochs, dataset, batch_size, ratio, noise=0., reg=0., cuda=false)
+function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., reg=0., cuda=false)
    if cuda && CUDA.has_cuda()
       device = Flux.gpu
       CUDA.allowscalar(false)
@@ -28,7 +28,7 @@ function training(model, epochs, dataset, batch_size, ratio, noise=0., reg=0., c
   end
   model = model |> device;
 
-  opt = Flux.Optimiser(Flux.WeightDecay(reg), Flux.ADAM(0.01, (0.9, 0.999), 1.0e-8))
+  opt = Flux.Optimiser(Flux.WeightDecay(reg), Flux.ADAM(lr, (0.9, 0.999), 1.0e-8))
   ltrain = 0.;
   lval = 0.;
   losses = [];
