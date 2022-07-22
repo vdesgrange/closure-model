@@ -9,6 +9,17 @@ struct Basis{T}
 end
 
 function generate_pod_basis(M, substract_mean::Bool = false)
+  """
+    generate_pod_basis(M, substract_mean::Bool = false)
+
+  Generate modes of Proper orthogonal decomposition. Return basis datastructure composed of modes and coefficients.
+
+  # Reference
+  ```
+  Shady E. Ahmed, Suraj Pawar, Omer San, Adil Rasheed, Traian Iliescu, and Bernd R.Noack.
+  On closures for reduced order models—a spectrum of first-principle to machine-learned avenues
+  ```
+  """
   n = size(M, 2)
   S = copy(M);
 
