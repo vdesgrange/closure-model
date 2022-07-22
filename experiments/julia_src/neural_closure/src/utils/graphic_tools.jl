@@ -22,10 +22,17 @@ function plot_regularization(noise, reg, a, b, c, d)
     plot!(xticks=(reg,["1e-12", "1e-10", "1e-8", "1e-6", "1e-5", "1e-4", "1e-3", "1e-2", "1e-1"]))
 end
 
-function animate_plot(u, x)
-end
-
 function show_state(u, title, x="t", y="x")
+    """
+        show_err(a, title, x="x", y="t")
+        Display heat map of a matrix
+
+    # Arguments
+    - `u`: Matrix
+    - `title::String`: title of the heatmap
+    - `x::String`: x label
+    - `y::String`: y label
+    """
     pl = heatmap(
         u,
         aspect_ratio = :equal,
@@ -43,6 +50,17 @@ function show_state(u, title, x="t", y="x")
 end
 
 function show_err(a, b, title, x="x", y="t")
+    """
+        show_err(a, b, title, x="x", y="t")
+        Display heat map of absolute error between 2 matrices.
+
+    # Arguments
+    - `a`: Matrix
+    - `b`: Matrix
+    - `title::String`: title of the heatmap
+    - `x::String`: x label
+    - `y::String`: y label
+    """
     pl = heatmap(
         abs.(a .- b),
         aspect_ratio = :equal,
@@ -56,12 +74,6 @@ function show_err(a, b, title, x="x", y="t")
         dpi=200,
     );
     return pl
-end
-
-function domain_curve(k, v, L)
-end
-
-function visualize_u_from_F(F, t, u, u0)
 end
 
 end

@@ -3,6 +3,11 @@ module ProcessingTools
 using Statistics
 
 function downsampling(u, d)
+  """
+    downsampling(u, d)
+
+  Downsample by d a matrix u. Compute average over cell of dimension d.
+  """
   n, m = floor.(Int, size(u) ./ d)
   d_u = zeros(n, m)
 
@@ -16,6 +21,12 @@ function downsampling(u, d)
 end
 
 function process_dataset(dataset, keep_high_dim=true)
+  """
+    process_dataset(dataset, keep_high_dim=true)
+
+  Process snapshot dataset of solution to ODE. 
+  Re-organize into 3 matrices: t values, initial values (x-snapshot), solution u (x-snapshot-t)
+  """
   n = size(dataset, 1)
 
   # todo - split between training and validation data
@@ -29,17 +40,14 @@ function process_dataset(dataset, keep_high_dim=true)
       t, u = dataset[i];
     end
 
-    push!(init_set, copy(u[:, 1])); # make copies ?
-    push!(true_set, copy(u)); # make copies ?
+    push!(init_set, copy(u[:, 1]));
+    push!(true_set, copy(u));
   end
 
   t_n = size(t, 1)
   x_n = size(init_set[1], 1)
 
   return t, hcat(init_set...), permutedims(reshape(hcat(true_set...), x_n, t_n, :), (1, 3, 2));
-end
-
-function split_dataset()
 end
 
 end
