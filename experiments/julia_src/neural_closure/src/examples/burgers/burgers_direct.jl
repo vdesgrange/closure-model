@@ -33,6 +33,14 @@ function check_result(nn, res, typ)
 end
 
 function get_data_loader(dataset, batch_size, ratio)
+   if cuda && CUDA.has_cuda()
+      device = Flux.gpu
+      CUDA.allowscalar(false)
+      @info "Training on GPU"
+  else
+      device = Flux.cpu
+      @info "Training on CPU"
+
   n = size(dataset, 1)
   t, init_set, true_set = ProcessingTools.process_dataset(dataset, false);
 
@@ -44,8 +52,8 @@ function get_data_loader(dataset, batch_size, ratio)
   switch_train_set = permutedims(train_set, (1, 3, 2));
   switch_val_set = permutedims(val_set, (1, 3, 2));
 
-  train_data = (init_train, switch_train_set, collect(ncycle([collect(t_train)], n)))
-  val_data = (init_val, switch_val_set,  collect(ncycle([collect(t_val)], n))) #  hcat(repeat([collect(t_val)], n)...)
+  train_data = (init_train |> device, switch_train_set |> device, collect(ncycle([collect(t_train)], n)) |> device)
+  val_data = (init_val |> device, switch_val_set |> device,  collect(ncycle([collect(t_val)], n)) |> device) #  hcat(repeat([collect(t_val)], n)...)
 
   train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true);
   val_loader = DataLoader(val_data, batchsize=batch_size, shuffle=false);
@@ -62,6 +70,7 @@ function training(model, epochs, dataset, batch_size, ratio, noise=0., reg=0., c
       device = Flux.cpu
       @info "Training on CPU"
   end
+  model = model |> device;
 
   opt = Flux.Optimiser(Flux.WeightDecay(reg), Flux.ADAM(0.01, (0.9, 0.999), 1.0e-8))
   ltrain = 0.;
@@ -93,7 +102,7 @@ function training(model, epochs, dataset, batch_size, ratio, noise=0., reg=0., c
   function traincb()
     ltrain = 0;
     for (x, y, t) in train_loader
-      (x, y, t) = (x, y, t) |> device;
+      # (x, y, t) = (x, y, t) |> device;
       ltrain += loss(x, y, t);
     end
     ltrain /= (train_loader.nobs / train_loader.batchsize);
