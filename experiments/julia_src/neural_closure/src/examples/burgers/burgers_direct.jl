@@ -8,8 +8,6 @@ using FluxTraining
 using OrdinaryDiffEq
 using DiffEqFlux
 using GalacticOptim
-using MLUtils
-using IterTools: ncycle
 
 include("../../utils/generators.jl")
 include("../../utils/processing_tools.jl")
@@ -17,20 +15,7 @@ include("../../utils/graphic_tools.jl")
 include("../../neural_ode/models.jl")
 include("../../neural_ode/regularization.jl")
 include("../../neural_ode/training.jl")
-
-function check_result(nn, res, typ)
-    t, u0, u = Generator.get_burgers_batch(0.5, 0., pi, 0., 64, 64, 0.03, typ);
-    prob_neuralode = DiffEqFlux.NeuralODE(nn, (t[1], t[end]), AutoTsit5(Rosenbrock23()), saveat=t);
-    u_pred = prob_neuralode(u0, res);
-
-    plot(
-        GraphicTools.show_state(u, ""),
-        GraphicTools.show_state(hcat(u_pred.u...), ""),
-        GraphicTools.show_err(hcat(u_pred.u...), u, "");
-        layout = (1, 3),
-    )
-    savefig("burgers_direct_results.png");
-end
+include("./analysis.jl")
 
 function training(model, epochs, dataset, batch_size, ratio, noise=0., reg=0., cuda=false)
    if cuda && CUDA.has_cuda()
@@ -117,7 +102,7 @@ function main()
   K, p, _, _ = training(model, epochs, data, batch_size, 0.5, 0., 0., true);
   # @save "./models/BurgersLinearModel.bson" K
 
-  check_result(K, p, 2)
+  BurgersAnalysis.check_result(K, p, 2)
 
   return K, p
 end

@@ -68,6 +68,7 @@ function get_data_loader(dataset, batch_size, ratio, cuda=true)
   else
       device = Flux.cpu
       @info "Training on CPU"
+  end
 
   n = size(dataset, 1)
   t, init_set, true_set = ProcessingTools.process_dataset(dataset, false);
