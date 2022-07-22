@@ -11,6 +11,9 @@ struct ODEValidationPhase <: FluxTraining.AbstractValidationPhase end
 
 
 function FluxTraining.step!(learner, phase::ODETrainingPhase, batch)
+    """
+    DEPRECATED
+    """
     xs, ys = batch
 
     FluxTraining.runstep(learner, phase, (; xs=xs, ys=ys)) do handle, state
@@ -31,6 +34,9 @@ end
 
 
 function FluxTraining.step!(learner, phase::ODEValidationPhase, batch)
+    """
+    DEPRECATED
+    """
     xs, ys = batch
 
     FluxTraining.runstep(learner, phase, (;xs=xs, ys=ys)) do _, state
@@ -41,6 +47,9 @@ end
 
 
 function fit!(learner, nepochs::Int, (trainiter, validiter))
+    """
+    DEPRECATED
+    """
     for i in 1:nepochs
         epoch!(learner, ODETrainingPhase(), trainiter)
         epoch!(learner, ODEValidationPhase(), validiter)
@@ -48,6 +57,9 @@ function fit!(learner, nepochs::Int, (trainiter, validiter))
 end
 
 function fit!(learner, nepochs::Int)
+    """
+    DEPRECATED
+    """
     fit!(learner, nepochs, (learner.data.training, learner.data.validation))
 end
 

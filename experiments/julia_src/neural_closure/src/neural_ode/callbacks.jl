@@ -1,6 +1,9 @@
 module Callbacks
 
 function callback_standalone(theta, loss, u_pred; plot_map=true)
+    """
+    DEPRECATED
+    """
     display(loss)
     if plot_map
         IJulia.clear_output(true);
@@ -17,6 +20,9 @@ function callback_standalone(theta, loss, u_pred; plot_map=true)
 end
 
 function callback(A, loss)
+  """
+  DEPRECATED
+  """
   println(loss);
   flush(stdout);
   false
