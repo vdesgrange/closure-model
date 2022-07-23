@@ -2,16 +2,12 @@ module BurgersDirect
 
 using CUDA
 using BSON: @save
-using Plots
 using Flux
-using FluxTraining
 using OrdinaryDiffEq
 using DiffEqFlux
-using GalacticOptim
 
 include("../../utils/generators.jl")
 include("../../utils/processing_tools.jl")
-include("../../utils/graphic_tools.jl")
 include("../../neural_ode/models.jl")
 include("../../neural_ode/regularization.jl")
 include("../../neural_ode/training.jl")

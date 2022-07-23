@@ -1,16 +1,19 @@
-module HO
-
 using Distributed
-using Distributed
-using Hyperopt
-using Hyperopt: @phyperopt
-using BSON: @save
-include("../../utils/generators.jl")
-include("../../neural_ode/models.jl")
-include("./burgers_direct.jl")
+
+pids = addprocs(4; exeflags=`--project=$(Base.active_project())`);
+
+@everywhere using Distributed
+@everywhere using Hyperopt
+@everywhere using Hyperopt: @phyperopt
+@everywhere using BSON: @save
+@everywhere using FileIO
+@everywhere using JLD2
+@everywhere include("../../utils/generators.jl")
+@everywhere include("../../neural_ode/models.jl")
+@everywhere include("./burgers_direct.jl")
 
 
-function f_autoencoder(i, lr, b, r, n)
+@everywhere function f_autoencoder(i, lr, b, r, n)
     x_n = 64;
     epochs = 100;
     ratio = 0.7;
@@ -19,37 +22,25 @@ function f_autoencoder(i, lr, b, r, n)
     model = Models.BasicAutoEncoder(x_n);
     K, p, l_train, _ = BurgersDirect.training(model, epochs, data, b, lr, ratio, n, r, true);
 
-    filename = "./models/tuning_burgers_basicautoencoder_" * string(i) * ".bson"
+    filename = "./models/tuning_burgers_basicautoencoder_2_" * string(i) * ".bson"
     @save filename K p
 
     return l_train
 end
 
-
-function tuning(n_iteration)
-    # pids = addprocs(2; exeflags=`--project=$(Base.active_project())`);
-
-    logs = [];
-    ho = @hyperopt for i = n_iteration,
-        sampler = Hyperopt.RandomSampler(),
+if nprocs() > 1
+    ho = @phyperopt for i = 50,
+        sampler = RandomSampler(),
             lr = LinRange(1f-4, 1f-1, 8),
             b = [128, 64, 32, 16],
             r = [1f-8, 1f-7, 1f-6, 1f-5, 1f-4, 1f-3, 1f-2, 1f-1],
             n = [.35, .3, .25, .2, .15, .1, .05, .01]
         l = f_autoencoder(i, lr, b, r, n);
-        @show "\t", i, "\t", b, "\t", r, "\t", n, "   \t f_autoencoder(b, r, n) = ", l, "    \t"
-        push!(logs, string(i, " ", b, " ", r, " ", n, "     f_autoencoder(b, r, n) = ", l, "  "));
+        print(i, "\t", b, "\t", r, "\t", n, "   \t f_autoencoder(b, r, n) = ", l, "    \t")
+        @show l
     end
-
-    for log in logs
-        @show log
-    end
-
-    # interrupt(pids);
-
-    return ho, logs
 end
 
-end
+JLD2.save("hyperopt_result.jld2", "ho", ho);
 
-export HO
+interrupt(pids);
