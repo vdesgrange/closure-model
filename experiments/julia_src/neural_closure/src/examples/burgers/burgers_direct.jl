@@ -94,7 +94,8 @@ function main()
   epochs = 10;
 
   data = Generator.read_dataset("./dataset/burgers_high_dim_training_set.jld2")["training_set"];
-  model = Models.BasicAutoEncoder(x_n);
+  # model = Models.BasicAutoEncoder(x_n);
+  model = Models.FeedForwardNetwork(x_n, 2, x_n);
   K, p, _, _ = training(model, epochs, data, batch_size, 0.5, 0., 0., true);
   # @save "./models/BurgersLinearModel.bson" K
 
