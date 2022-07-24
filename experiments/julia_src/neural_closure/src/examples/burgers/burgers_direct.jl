@@ -30,7 +30,7 @@ function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., 
   losses = [];
 
   @info("Loading dataset")
-  (train_loader, val_loader) = ProcessingTools.get_data_loader(dataset, batch_size, ratio);
+  (train_loader, val_loader) = ProcessingTools.get_data_loader(dataset, batch_size, ratio, false);
 
   @info("Building model")
   p, re = Flux.destructure(model);
