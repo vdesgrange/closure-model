@@ -27,10 +27,9 @@ function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., 
   opt = Flux.Optimiser(Flux.WeightDecay(reg), Flux.ADAM(lr, (0.9, 0.999), 1.0e-8))
   ltrain = 0.;
   lval = 0.;
-  losses = [];
 
   @info("Loading dataset")
-  (train_loader, val_loader) = ProcessingTools.get_data_loader(dataset, batch_size, ratio, false);
+  (train_loader, val_loader) = ProcessingTools.get_data_loader(dataset, batch_size, ratio, false, false);
 
   @info("Building model")
   p, re = Flux.destructure(model);
@@ -47,14 +46,13 @@ function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., 
   function loss(x, y, t)
     u_pred = predict_neural_ode(x, t[1]);
     ŷ = Reg.gaussian_augment(u_pred, noise);
-    l = Flux.mse(ŷ, permutedims(y, (1, 3, 2))) # + Reg.l2(p, reg);
+    l = Flux.mse(ŷ, permutedims(y, (1, 3, 2)))
     return l;
   end
 
   function traincb()
     ltrain = 0;
     for (x, y, t) in train_loader
-      # (x, y, t) = (x, y, t) |> device;
       ltrain += loss(x, y, t);
     end
     ltrain /= (train_loader.nobs / train_loader.batchsize);
@@ -78,7 +76,7 @@ function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., 
     @show(lval);
   end
 
-  @info("Train")
+  @info("Initiate training")
   trigger = Flux.plateau(() -> ltrain, 20; init_score = 1, min_dist = 1f-5);
   Flux.@epochs epochs begin
     Flux.train!(loss, Flux.params(p), train_loader, opt, cb = [traincb, evalcb]);
@@ -90,7 +88,7 @@ end
 
 function main()
   x_n = 64;
-  batch_size = 128;
+  batch_size = 32;
   epochs = 10;
 
   data = Generator.read_dataset("./dataset/burgers_high_dim_training_set.jld2")["training_set"];

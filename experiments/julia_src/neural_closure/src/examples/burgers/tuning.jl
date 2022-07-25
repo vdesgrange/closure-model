@@ -28,6 +28,25 @@ pids = addprocs(4; exeflags=`--project=$(Base.active_project())`);
     return l_train
 end
 
+@everywhere function f_fnn(i, l, n)
+    x_n = 64;
+    epochs = 100;
+    ratio = 0.7;
+    lr = 0.03;
+    r = 1e-07;
+    n = 0;
+    b = 32;
+
+    data = Generator.read_dataset("./dataset/burgers_high_dim_training_set.jld2")["training_set"];
+    model = Models.FeedForwardNetwork(x_n, l, n);
+    K, p, l_train, _ = BurgersDirect.training(model, epochs, data, b, ratio, lr, n, r, false);
+
+    filename = "./models/feedforward/tuning_burgers_fnn_worker_" * string(myid()) * "_iter_" * string(i) * ".bson"
+    @save filename K p
+
+    return l_train
+end
+
 ho = @phyperopt for i = 50,
     sampler = RandomSampler(),
         lr = [0.1, 0.03, 0.01, 0.003], 
