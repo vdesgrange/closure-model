@@ -55,34 +55,46 @@ function process_dataset(dataset, keep_high_dim=true)
 end
 
 
-function get_data_loader(dataset, batch_size, ratio, cuda=true)
+function get_data_loader(dataset, batch_size, ratio, split_axis=true, cuda=false)
   """
     get_data_loader(dataset, batch_size, ratio)
 
   Split dataset into training and validation set.
   """
-   if cuda && CUDA.has_cuda()
-      device = Flux.gpu
+  device = Flux.cpu
+  if cuda && CUDA.has_cuda()
       CUDA.allowscalar(true)
-      @info "Training on GPU"
-  else
-      device = Flux.cpu
-      @info "Training on CPU"
+      device = Flux.gpu
   end
 
-  n = size(dataset, 1)
   t, init_set, true_set = ProcessingTools.process_dataset(dataset, false);
 
-  t_train, t_val = splitobs(t, at = ratio);
-  train_set, val_set = splitobs(true_set, at = ratio);
-  init_train = copy(init_set);
+  # True solution
+  if (split_axis)
+    t_train, t_val = splitobs(t, at = ratio);
+    train_set, val_set = splitobs(true_set, at = ratio);
+  else
+    t_train, t_val = copy(t), copy(t);
+    switch_true_set = permutedims(true_set, (1, 3, 2));
+    train_set, val_set = splitobs(switch_true_set, at = ratio);
+    train_set = permutedims(train_set, (1, 3, 2));
+    val_set = permutedims(val_set, (1, 3, 2));
+  end
+
+  # Initial condition
+  init_train = copy(train_set[:, :, 1]);
   init_val = copy(val_set[:, :, 1]);
 
-  switch_train_set = permutedims(train_set, (1, 3, 2));
-  switch_val_set = permutedims(val_set, (1, 3, 2));
+  train_set = permutedims(train_set, (1, 3, 2));
+  val_set = permutedims(val_set, (1, 3, 2));
 
-  train_data = (init_train |> device, switch_train_set |> device, collect(ncycle([collect(t_train)], n)) |> device)
-  val_data = (init_val |> device, switch_val_set |> device,  collect(ncycle([collect(t_val)], n)) |> device)
+  # Set size
+  n_train = size(train_set, 3)
+  n_val = size(val_set, 3)
+
+  # Set data loader
+  train_data = (init_train |> device, train_set |> device, collect(ncycle([collect(t_train)], n_train)))
+  val_data = (init_val |> device, val_set |> device,  collect(ncycle([collect(t_val)], n_val)))
 
   train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true);
   val_loader = DataLoader(val_data, batchsize=batch_size, shuffle=false);

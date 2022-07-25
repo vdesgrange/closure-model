@@ -62,7 +62,7 @@ function FeedForwardNetwork(x_n, l, n)
   return Flux.Chain(
     Flux.Dense(x_n, n, tanh; bias=true, init=Flux.glorot_uniform),
     hidden...,
-    Flux.Dense(n, x_n, identity; bias=true, init=Flux.glorot_uniform),
+    Flux.Dense(n, x_n, identity; bias=true, init=Flux.kaiming_uniform),
   )
 end
 
