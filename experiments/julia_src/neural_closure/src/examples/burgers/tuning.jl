@@ -1,6 +1,6 @@
 using Distributed
 
-pids = addprocs(4; exeflags=`--project=$(Base.active_project())`);
+pids = addprocs(2; exeflags=`--project=$(Base.active_project())`);
 
 @everywhere using Distributed
 @everywhere using Hyperopt
@@ -28,7 +28,7 @@ pids = addprocs(4; exeflags=`--project=$(Base.active_project())`);
     return l_train
 end
 
-@everywhere function f_fnn(i, l, n)
+@everywhere function f_fnn(i, la, ne)
     x_n = 64; # Discretization
     epochs = 100; # Iterations
     ratio = 0.7; # train/val ratio
@@ -38,7 +38,7 @@ end
     b = 32;
 
     data = Generator.read_dataset("./dataset/burgers_high_dim_nu_variational_dataset.jld2")["training_set"];
-    model = Models.FeedForwardNetwork(x_n, l, n);
+    model = Models.FeedForwardNetwork(x_n, la, ne);
     K, p, l_train, _ = BurgersDirect.training(model, epochs, data, b, ratio, lr, n, r, false);
 
     filename = "./models/feedforward/tuning_burgers_fnn_nonoise_worker_" * string(myid()) * "_iter_" * string(i) * ".bson"
@@ -55,7 +55,7 @@ end
 ho = @phyperopt for i = 20,
     sampler = RandomSampler(),
         la = [1, 2, 3, 4, 5],
-        ne = [64, 32, 16, 8],
+        ne = [64, 32, 16, 8]
     l = f_fnn(i, la, ne);
     # print(i, "\t", b, "\t", r, "\t", n, "   \t f_autoencoder(b, r, n) = ", l, "    \t")
     print(i, "\t", la, "\t", ne, "\t f_autoencoder(la, ne) = ", l, "    \t")

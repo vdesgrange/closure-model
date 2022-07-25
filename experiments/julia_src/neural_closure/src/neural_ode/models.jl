@@ -55,14 +55,14 @@ function FeedForwardNetwork(x_n, l, n)
 
   hidden = []
   for i in l
-    layer = Flux.Dense(n, n, tanh; bias=true, init=Flux.glorot_uniform);
+    layer = Flux.Dense(n => n, tanh; init=Flux.glorot_uniform, bias=true);
     push!(hidden, layer);
   end
 
   return Flux.Chain(
-    Flux.Dense(x_n, n, tanh; bias=true, init=Flux.glorot_uniform),
+    Flux.Dense(x_n => n, tanh; init=Flux.glorot_uniform, bias=true),
     hidden...,
-    Flux.Dense(n, x_n, identity; bias=true, init=Flux.kaiming_uniform),
+    Flux.Dense(n => x_n, identity; init=Flux.glorot_uniform, bias=true),
   )
 end
 
