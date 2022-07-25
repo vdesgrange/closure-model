@@ -90,6 +90,9 @@ function validation_fit(K, p, data, ratio)
     return mse_tot / n, l1_tot / n, mse_train / n, l1_train / n, mse_val / n, l1_val / n
 end
 
+function generate_variational_nu_set()
+end
+
 # test_simulation(K, 100, 3)
 
 end
