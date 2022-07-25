@@ -37,7 +37,7 @@ end
     n = 0.; # noise
     b = 32;
 
-    data = Generator.read_dataset("./dataset/burgers_high_dim_training_set.jld2")["training_set"];
+    data = Generator.read_dataset("./dataset/burgers_high_dim_nu_variational_dataset.jld2")["training_set"];
     model = Models.FeedForwardNetwork(x_n, l, n);
     K, p, l_train, _ = BurgersDirect.training(model, epochs, data, b, ratio, lr, n, r, false);
 

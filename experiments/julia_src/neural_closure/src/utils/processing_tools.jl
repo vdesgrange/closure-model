@@ -96,7 +96,7 @@ function get_data_loader(dataset, batch_size, ratio, split_axis=true, cuda=false
   val_data = (init_val |> device, val_set |> device,  collect(ncycle([collect(t_val)], n_val)))
 
   train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true);
-  val_loader = DataLoader(val_data, batchsize=batch_size, shuffle=false);
+  val_loader = DataLoader(val_data, batchsize=n_val, shuffle=false);
 
   return (train_loader, val_loader)
 end
