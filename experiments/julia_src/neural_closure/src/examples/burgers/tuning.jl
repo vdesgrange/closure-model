@@ -34,14 +34,14 @@ end
     ratio = 0.7; # train/val ratio
     lr = 0.03; # learning rate
     r = 1e-07; # weigh decay (L2 reg)
-    n = 0.; # noise
+    n = 0.15; # noise
     b = 32;
 
     data = Generator.read_dataset("./dataset/burgers_high_dim_nu_variational_dataset.jld2")["training_set"];
     model = Models.FeedForwardNetwork(x_n, la, ne);
     K, p, l_train, _ = BurgersDirect.training(model, epochs, data, b, ratio, lr, n, r, false);
 
-    filename = "./models/feedforward/tuning_burgers_fnn_nonoise_worker_" * string(myid()) * "_iter_" * string(i) * ".bson"
+    filename = "./models/feedforward/tuning_burgers_fnn_15noise_worker_" * string(myid()) * "_iter_" * string(i) * ".bson"
     @save filename K p
 
     return l_train
@@ -52,6 +52,7 @@ end
 # r = [1f-8, 1f-7, 1f-6, 1f-5, 1f-4, 1f-3, 1f-2, 1f-1],
 # n = [.35, .3, .25, .2, .15, .1, .05, .01]
 
+Random.seed!(0)
 ho = @phyperopt for i = 20,
     sampler = RandomSampler(),
         la = [1, 2, 3, 4, 5],
@@ -62,6 +63,6 @@ ho = @phyperopt for i = 20,
     @show l
 end
 
-JLD2.save("hyperopt_result_fnn.jld2", "ho", ho);
+JLD2.save("hyperopt_result_fnn_15noise.jld2", "ho", ho);
 
 interrupt(pids);
