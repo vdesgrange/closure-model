@@ -32,7 +32,7 @@ function get_burgers_fft(t, dx, x_n, nu, u0)
   prob = ODEProblem(ODEFunction(f), copy(u0), tspan, (k, nu))
   sol = solve(prob, AutoTsit5(Rosenbrock23()), saveat=t, reltol=1e-8, abstol=1e-8)
 
-  return sol, sol.t, hcat(sol.u...)
+  return sol.t, hcat(sol.u...)
 end
 
 

@@ -114,7 +114,7 @@ function burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, ty
   ]);
 
   u0 = copy(init[rand_init](t, x));
-  _, t, u = Equations.get_burgers_fft(t, dx, x_n, nu, u0[1, :])
+  t, u = Equations.get_burgers_fft(t, dx, x_n, nu, u0[1, :])
 
   if sum(isfinite.(u)) != prod(size(u))
     print("u matrix is not finite.")
