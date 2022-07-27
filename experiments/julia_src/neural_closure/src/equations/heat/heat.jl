@@ -4,7 +4,7 @@ using OrdinaryDiffEq
 using SuiteSparse
 using SparseArrays
 
-include("initial_functions.jl")
+include("../initial_functions.jl")
 
 function get_heat(t, x, n=[], c=[], ka=1.)
   return InitialFunctions.analytical_heat_1d(t, x, n, c, ka)

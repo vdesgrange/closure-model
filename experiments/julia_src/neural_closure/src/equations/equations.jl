@@ -1,6 +1,6 @@
 module Equations
 
-include("heat.jl")
-include("burgers.jl")
+include("heat/heat.jl")
+include("burgers/burgers.jl")
 
 end
