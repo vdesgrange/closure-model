@@ -1,45 +1,18 @@
-using FFTW
-using AbstractFFTs
-using OrdinaryDiffEq
-using SuiteSparse
-using SparseArrays
 using Statistics
-
-function weno5()
-end
-
-function get_burgers_fft(t, dx, x_n, nu, u0)
-  """
-  Pseudo-spectral method
-  Solve conservative Burgers equation with pseudo-spectral method.
-  """
-  k = 2 * pi * AbstractFFTs.fftfreq(x_n, 1. / dx) # Sampling rate, inverse of sample spacing
-
-  function f(u, p, t)
-    k = p[1]
-    nu = p[2]
-
-    u_hat = FFTW.fft(u)
-    u_hat_x = 1im .* k .* u_hat
-    u_hat_xx = (-k.^2) .* u_hat
-
-    u_x = FFTW.ifft(u_hat_x)
-    u_xx = FFTW.ifft(u_hat_xx)
-    u_t = -u .* u_x + nu .* u_xx
-    return real.(u_t)
-  end
-
-  tspan = (t[1], t[end])
-  prob = ODEProblem(ODEFunction(f), copy(u0), tspan, (k, nu))
-  sol = solve(prob, AutoTsit5(Rosenbrock23()), saveat=t, reltol=1e-8, abstol=1e-8)
-
-  return sol.t, hcat(sol.u...)
-end
-
 
 function galerkin_projection(t, S, Φ, ν, dx, dt)
   """
+    galerkin_projection(t, S, Φ, ν, dx, dt)
+
   POD-GP for non-conservative Burgers equation
+
+  # Arguments
+  - `t::Vector<Float>` t-axis values
+  - `S::Matrix` : matrix of snapshots
+  - `Φ::Vector<Float>`: pod modes
+  - `ν::Float`: viscosity
+  - `dx::Float`: x-axis discretization
+  - `dt::Float`: t-axis discretization
   """
   u0 = copy(S[:, 1]);
   ū = mean(S, dims=2);

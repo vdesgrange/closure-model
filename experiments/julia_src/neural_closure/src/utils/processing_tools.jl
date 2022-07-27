@@ -60,10 +60,11 @@ function get_data_loader(dataset, batch_size, ratio, split_axis=true, cuda=false
 
   Split dataset into training and validation set.
   """
-  device = Flux.cpu
   if cuda && CUDA.has_cuda()
-      CUDA.allowscalar(true)
-      device = Flux.gpu
+    CUDA.allowscalar(true)
+    device = Flux.gpu
+  else
+    device = Flux.cpu
   end
 
   t, init_set, true_set = ProcessingTools.process_dataset(dataset, false);

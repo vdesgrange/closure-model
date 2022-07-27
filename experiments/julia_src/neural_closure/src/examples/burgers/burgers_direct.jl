@@ -22,17 +22,17 @@ function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., 
       device = Flux.cpu
       @info "Training on CPU"
   end
-  model = model |> device;
 
   opt = Flux.Optimiser(Flux.WeightDecay(reg), Flux.ADAM(lr, (0.9, 0.999), 1.0e-8))
   ltrain = 0.;
   lval = 0.;
 
   @info("Loading dataset")
-  (train_loader, val_loader) = ProcessingTools.get_data_loader(dataset, batch_size, ratio, false, false);
+  (train_loader, val_loader) = ProcessingTools.get_data_loader(dataset, batch_size, ratio, false, cuda);
 
   @info("Building model")
-  p, re = Flux.destructure(model);
+  model_gpu = model |> device;
+  p, re = Flux.destructure(model_gpu);
   net(u, p, t) = re(p)(u);
 
   prob = ODEProblem{false}(net, Nothing, (Nothing, Nothing));
@@ -40,7 +40,7 @@ function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., 
   function predict_neural_ode(x, t)
     tspan = (t[1], t[end]);
     _prob = remake(prob; u0=x, p=p, tspan=tspan);
-    Array(solve(_prob, AutoTsit5(Rosenbrock23()), u0=x, p=p, saveat=t));
+    device(solve(_prob, AutoTsit5(Rosenbrock23()), u0=x, p=p, saveat=t));
   end
 
   function loss(x, y, t)
