@@ -54,7 +54,7 @@ function process_dataset(dataset, keep_high_dim=true)
   return t, hcat(init_set...), permutedims(reshape(hcat(true_set...), x_n, t_n, :), (1, 3, 2));
 end
 
-function get_data_loader(dataset, batch_size, ratio, split_axis=true, cuda=false)
+function get_data_loader(dataset, batch_size, ratio, split_axis=true, cuda=true)
   """
     get_data_loader(dataset, batch_size, ratio)
 

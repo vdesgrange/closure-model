@@ -13,7 +13,7 @@ include("../../neural_ode/regularization.jl")
 include("../../neural_ode/training.jl")
 include("./analysis.jl")
 
-function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., reg=0., cuda=false)
+function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., reg=0., cuda=true)
    if cuda && CUDA.has_cuda()
       device = Flux.gpu
       CUDA.allowscalar(false)
@@ -33,6 +33,7 @@ function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., 
   @info("Building model")
   model_gpu = model |> device;
   p, re = Flux.destructure(model_gpu);
+  p = p |> device;
   net(u, p, t) = re(p)(u);
 
   prob = ODEProblem{false}(net, Nothing, (Nothing, Nothing));
