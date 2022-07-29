@@ -23,8 +23,9 @@ function generate_pod_basis(M, substract_mean::Bool = false)
   n = size(M, 2)
   S = copy(M);
 
+  sm = mean(S, dims=2);
   if substract_mean
-    S .-= mean(S, dims=2);
+      S .-= sm;
   end
 
   C = S'S;
@@ -40,7 +41,7 @@ function generate_pod_basis(M, substract_mean::Bool = false)
   θ = real(S * W) * Diagonal(1 ./ D) # Modes
   A = θ' * S # Coefficients
 
-  return Basis(θ, A)
+  return Basis(θ, A), sm
 end
 
 end

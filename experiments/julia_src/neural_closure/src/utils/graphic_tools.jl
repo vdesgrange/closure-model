@@ -5,11 +5,12 @@ pyplot()
 
 
 function simple_plotter(ks, title="Simple plot", L=1.)
-  plot()
+  pl = Plots.plot();
   for k in ks
     x = LinRange(0, L, size(k, 1))
-    plot!(x, k)
+    Plots.plot!(pl, x, k);
   end
+
 end
 
 function plot_regularization(noise, reg, a, b, c, d)
