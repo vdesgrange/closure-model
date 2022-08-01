@@ -12,7 +12,7 @@ using Distributions
 
 function gaussian_init(t, x)
   u = zeros(Float64, size(t, 1), size(x, 1))
-  u[1, :] .= exp.(-(x - 1).^2)
+  u[1, :] .= exp.(-(x .- 1).^2)
   u[:, 1] .= 0
   u[:, end] .= 0
   return u
@@ -56,12 +56,14 @@ end
 
 function advecting_shock(t, x, nu)
   Re = 1. / nu;
-  t0 = exp(Re / 8);
+  t0 = exp(Re / 8.);
 
   u0 = zeros(Float64, size(t, 1), size(x, 1));
-  u0[1, :] .= x ./ (1 + sqrt(1. / t0) * exp(Re * (x.^2 / 4)));
+  u0[1, :] .= x ./ (1 .+ sqrt(1. / t0) * exp.(Re * (x.^2 ./ 4)));
   u0[:, 1] .= 0
   u0[:, end] .= 0
+
+  return u0
 end
 
 function analytical_heat_1d(t, x, n=[], c=[], ka=1.)

@@ -44,7 +44,7 @@ function show_state(u, title, x="t", y="x")
         #xlabel = x,
         #ylabel = y,
         plot_title = title,
-        dpi=200,
+        dpi=600,
         reuse=false,
     );
     return pl
