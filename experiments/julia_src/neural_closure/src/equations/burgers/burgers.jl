@@ -74,13 +74,27 @@ function get_burgers_godunov(t, dx, x_n, nu, u0)
   Godunov method
   "A Difference Method for the Numerical Calculation of Discontinous Solutions of Hydrodynamic Equations"
   """
-  function riemann()
+  function riemann(u, xt)
+        S = (u[2:end] .+ u[1:end-1]) ./ 2.;
+        a = (u[2:end] .>= u[1:end-1]) .* (((S .> xt) .* u[1:end-1]) .+ ((S .<= xt) .* u[2:end]));
+        b = (u[2:end] .< u[1:end-1]) .* (
+            ((xt .<= u[1:end-1]) .* u[1:end-1]) .+
+            (((xt .> u[1:end-1]) .& (xt .< u[2:end])) .* xt) +
+            ((xt .>= u[2:end]) .* u[2:end])
+            );
+    return a .+ b;
   end
 
-  function num_flux(u)
+  function num_flux(u, xt=0.)
+    r = riemann(u, xt);
+    return r.^2 ./ 2.;
   end
 
   function f(u, p, t)
+    nf_u = num_flux(u, 0.);
+    u_t = zeros(size(u)[1])
+    u_t[2:end-1] = - (nf_u[2:end] - nf_u[1:end-1]) ./ dx
+    return u_t
   end
 
   tspan = (t[1], t[end])
