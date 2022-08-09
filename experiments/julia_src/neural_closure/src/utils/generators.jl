@@ -103,7 +103,7 @@ function burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, ty
   t = LinRange(t_min, t_max, t_n);
   x = LinRange(x_min, x_max, x_n);
 
-  rand_init = rand((1, 2));
+  rand_init = rand((1, 3));
   if typ > 0
     rand_init = typ;
   end
@@ -111,10 +111,15 @@ function burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, ty
   init = Dict([
     (1, InitialFunctions.random_init),
     (2, (a, b) -> InitialFunctions.high_dim_random_init(a, b, 20)),
+    (3, (a, b) -> InitialFunctions.advecting_shock(a, b, nu)),
   ]);
 
   u0 = copy(init[rand_init](t, x));
-  t, u = Equations.get_burgers_fft(t, dx, x_n, nu, u0[1, :])
+  if ((rand_init == 3) || (nu == 0.))
+    t, u = Equations.get_burgers_godunov(t, dx, x_n, nu, u0[1, :])
+  else
+    t, u = Equations.get_burgers_fft(t, dx, x_n, nu, u0[1, :])
+  end
 
   if sum(isfinite.(u)) != prod(size(u))
     print("u matrix is not finite.")
