@@ -1392,6 +1392,24 @@ git-tree-sha1 = "013596dcee5e55eb36ff56b8d4df888df01e040d"
 uuid = "3bd65402-5787-11e9-1adc-39752487f4e2"
 version = "0.2.6"
 
+[[Optimization]]
+deps = ["ArrayInterfaceCore", "ConsoleProgressMonitor", "DiffResults", "DocStringExtensions", "Logging", "LoggingExtras", "Pkg", "Printf", "ProgressLogging", "Reexport", "Requires", "SciMLBase", "SparseArrays", "TerminalLoggers"]
+git-tree-sha1 = "f2dbe632d3aad1fb1e5ee7dbbeb4896aabb39da1"
+uuid = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
+version = "3.8.2"
+
+[[OptimizationOptimJL]]
+deps = ["Optim", "Optimization", "Reexport", "SparseArrays"]
+git-tree-sha1 = "76ac41f9e82ba98a600d8a380532adef76b27e15"
+uuid = "36348300-93cb-4f02-beb5-3c3902f8871e"
+version = "0.1.2"
+
+[[OptimizationOptimisers]]
+deps = ["Optimisers", "Optimization", "Printf", "ProgressLogging", "Reexport"]
+git-tree-sha1 = "e2f152fc4adc9a634ca6ec00de2f2500d8642789"
+uuid = "42dfb2eb-d2b4-4451-abcd-913932933ac1"
+version = "0.1.0"
+
 [[Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "51a08fb14ec28da2ec7a927c4337e4332c2a4720"
