@@ -89,20 +89,17 @@ end
 
 function main()
   x_n = 64; # Discretization
-  epochs = 10; # Iterations
-  ratio = 0.7; # train/val ratio
+  epochs = 100; # Iterations
+  ratio = 0.75; # train/val ratio
   lr = 0.03; # learning rate
   r = 1e-6; # weigh decay (L2 reg)
   n = 0.01; # noise
   b = 32;
 
-  # data = Generator.read_dataset("./dataset/burgers_high_dim_nu_variational_dataset.jld2")["training_set"];
-  data = Generator.read_dataset("./dataset/burgers_high_dim_training_set.jld2")["training_set"];
+  data = Generator.read_dataset("./dataset/high_dim_1k_set.jld2")["training_set"];
   model = Models.FeedForwardNetwork(x_n, 3, 64);
   K, p, _, _ = training(model, epochs, data, b, ratio, lr, n, r, true);
-  # @save "./models/BurgersLinearModel.bson" K
-
-  BurgersAnalysis.check_result(K, p, 2)
+  @save "./models/high_dim_1k_model.bson" K p
 
   return K, p
 end

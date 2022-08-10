@@ -53,6 +53,7 @@ function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., 
     return l;
   end
 
+
   function val_loss(θ, x, y, t)
     u_pred = predict_neural_ode(θ, x, t[1]);
     ŷ = u_pred;
@@ -85,12 +86,12 @@ function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., 
 
   @info("LBFGS")
   optprob2 = remake(optprob, u0 = result_neuralode.u)
-  θ = Optimization.solve(optprob2, Optim.BFGS(initial_stepnorm=0.01),
+  result_neuralode2 = Optimization.solve(optprob2, Optim.BFGS(initial_stepnorm=0.01),
                                           ncycle(train_loader, 100),
                                           callback=cb,
                                           allow_f_increases = false)
 
-  return re(θ), p, ltrain, lval
+  return re(result_neuralode2.u), p, ltrain, lval
 end
 
 function main()
@@ -102,11 +103,10 @@ function main()
   n = 0.01; # noise
   b = 32;
 
+  # data = Generator.read_dataset("./dataset/burgers_high_dim_nu_variational_dataset.jld2")["training_set"];
   data = Generator.read_dataset("./dataset/burgers_high_dim_training_set.jld2")["training_set"];
   model = Models.FeedForwardNetwork(x_n, 3, 64);
-  K, p, ltrain, lval = training(model, epochs, data, b, ratio, lr, n, r, true);
-
-  # BurgersAnalysis.check_result(K, p, 2)
+  K, p, _, _ = training(model, epochs, data, b, ratio, lr, n, r, true);
 
   return K, p
 end
