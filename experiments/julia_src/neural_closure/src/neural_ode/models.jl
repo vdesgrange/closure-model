@@ -66,4 +66,30 @@ function FeedForwardNetwork(x_n, l, n)
   )
 end
 
+function NonAutonomousFeedForwardNetwork(x_n, l, n)
+  """
+    FeedForwardNetwork(x_n, l, n)
+
+  Create a FeedForwardNetwork flux chain model. Number of layers and neurons are variables.
+  Glorot uniform used for initialization
+
+  # Arguments
+  - `x_n::Integer`: input/output dimension
+  - `l::Integer`: number of hidden layers
+  - `n::Integer`: number of neurons in hidden layers
+  """
+
+  hidden = []
+  for i in l
+    layer = Flux.Dense(n => n, tanh; init=Flux.glorot_uniform, bias=true);
+    push!(hidden, layer);
+  end
+
+  return Flux.Chain(
+  Flux.Dense((x_n + 1) => n, tanh; init=Flux.glorot_uniform, bias=true),
+    hidden...,
+    Flux.Dense(n => x_n, identity; init=Flux.glorot_uniform, bias=true),
+  )
+end
+
 end
