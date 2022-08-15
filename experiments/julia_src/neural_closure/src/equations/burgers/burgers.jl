@@ -1,6 +1,7 @@
 using FFTW
 using AbstractFFTs
 using OrdinaryDiffEq
+using DiffEqSensitivity
 using Statistics
 using Zygote
 
@@ -28,7 +29,8 @@ function get_burgers_fft(t, dx, x_n, nu, u0)
 
   tspan = (t[1], t[end])
   prob = ODEProblem(ODEFunction(f), copy(u0), tspan, (k, nu))
-  sol = solve(prob, RK4(), saveat=t, reltol=1e-8, abstol=1e-8) # AutoTsit5(Rosenbrock23()), 
+  sol = solve(prob, Tsit5(), saveat=t, reltol=1e-9, abstol=1e-9) 
+  # AutoTsit5(Rosenbrock23()), 
 
   return sol.t, hcat(sol.u...)
 end
