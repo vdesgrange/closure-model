@@ -20,7 +20,7 @@ function Δ_loss(K, ŷ, y, Δt)
 
     Derivative fitting when y is a snapshot and ∂y∂t unknown.
   """
-  ∂y∂t = (y[:, 3:end] - y[:, 1:end-2]) / (2 * Δt)
+  ∂y∂t = (y[:, 2:end] - y[:, 1:end-1]) / Δt
   return Flux.mse(K(ŷ), ∂y∂t)
 end
 
