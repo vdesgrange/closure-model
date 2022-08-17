@@ -1,6 +1,6 @@
 using Distributed
 
-pids = addprocs(2; exeflags=`--project=$(Base.active_project())`);
+pids = addprocs(10; exeflags=`--project=$(Base.active_project())`);
 
 @everywhere using Distributed
 @everywhere using Hyperopt
@@ -33,18 +33,17 @@ end
     ne = all[2]
     x_n = 64; # Discretization
     epochs = 100; # Iterations
-    ratio = 0.7; # train/val ratio
+    ratio = 0.75; # train/val ratio
     lr = 0.03; # learning rate
     r = 1e-07; # weigh decay (L2 reg)
     n = 0.05; # noise
     b = 32;
 
-    # data = Generator.read_dataset("./dataset/burgers_high_dim_nu_variational_dataset.jld2")["training_set"];
-    data = Generator.read_dataset("./dataset/burgers_high_dim_training_set.jld2")["training_set"];
+    data = Generator.read_dataset("./dataset/high_dim_1k_set_j173.jld2")["training_set"];
     model = Models.FeedForwardNetwork(x_n, la, ne);
     K, p, l_train, _ = BurgersDirect.training(model, epochs, data, b, ratio, lr, n, r, false);
 
-    filename = "./models/feedforward2/tuning_burgers_fnn_05noise_worker_" * string(myid()) * "_iter_" * string(i) * ".bson"
+    filename = "./models/feedforward_1k/tuning_burgers_05noise_reg_worker_" * string(myid()) * "_iter_" * string(i) * ".bson"
     @save filename K p
 
     return l_train
@@ -55,7 +54,9 @@ end
 # r = [1f-8, 1f-7, 1f-6, 1f-5, 1f-4, 1f-3, 1f-2, 1f-1],
 # n = [.35, .3, .25, .2, .15, .1, .05, .01]
 la = [1, 2, 3, 4, 5];
-ne = [8, 16, 24, 32, 40];
+ne = [8, 16, 24, 32, 40, 48, 56, 64];
+# n = [0.0]
+# r = collect(LinRange(1f-12, 1f-1, 20))
 all_set = [];
 useless_set = [];
 for k in la
@@ -66,7 +67,7 @@ for k in la
 end
 
 # Random.seed!(0)
-ho = @phyperopt for i = 25,
+ho = @phyperopt for i = 40,
     sampler = LHSampler(),
         all = all_set,
         useless = useless_set
@@ -76,6 +77,6 @@ ho = @phyperopt for i = 25,
     @show l
 end
 
-JLD2.save("hyperopt_result_fnn_05noise.jld2", "ho", ho);
+JLD2.save("hyperopt_result_reg_1k_05noise.jld2", "ho", ho);
 
 interrupt(pids);

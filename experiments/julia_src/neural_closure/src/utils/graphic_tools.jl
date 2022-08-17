@@ -1,7 +1,6 @@
 module GraphicTools
 
 using Plots
-pyplot()
 
 
 function simple_plotter(ks, title="Simple plot", L=1.)
