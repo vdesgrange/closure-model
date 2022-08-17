@@ -4,6 +4,7 @@ using CUDA
 using BSON: @save
 using Flux
 using OrdinaryDiffEq
+using DiffEqSensitivity
 using DiffEqFlux
 
 include("../../utils/generators.jl")
@@ -41,7 +42,7 @@ function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., 
   function predict_neural_ode(x, t)
     tspan = (t[1], t[end]);
     _prob = remake(prob; u0=x, p=p, tspan=tspan);
-    device(solve(_prob, AutoTsit5(Rosenbrock23()), u0=x, p=p, saveat=t));
+    device(solve(_prob, Tsit5(), u0=x, p=p, saveat=t, abstol=1e-9, reltol=1e-9, sensealg=DiffEqSensitivity.BacksolveAdjoint()));
   end
 
   function loss(x, y, t)
@@ -78,7 +79,7 @@ function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., 
   end
 
   @info("Initiate training")
-  trigger = Flux.plateau(() -> ltrain, 20; init_score = 1, min_dist = 1f-5);
+  trigger = Flux.plateau(() -> ltrain, 10; init_score = 1, min_dist = 1f-4);
   Flux.@epochs epochs begin
     Flux.train!(loss, Flux.params(p), train_loader, opt, cb = [traincb, evalcb]);
     trigger() && break;
@@ -89,7 +90,7 @@ end
 
 function main()
   x_n = 64; # Discretization
-  epochs = 100; # Iterations
+  epochs = 20; # Iterations
   ratio = 0.75; # train/val ratio
   lr = 0.03; # learning rate
   r = 1e-6; # weigh decay (L2 reg)
