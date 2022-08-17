@@ -54,7 +54,7 @@ function FeedForwardNetwork(x_n, l, n)
   """
 
   hidden = []
-  for i in l
+  for i in range(1, l, step=1)
     layer = Flux.Dense(n => n, tanh; init=Flux.glorot_uniform, bias=true);
     push!(hidden, layer);
   end
@@ -66,30 +66,39 @@ function FeedForwardNetwork(x_n, l, n)
   )
 end
 
-function NonAutonomousFeedForwardNetwork(x_n, l, n)
-  """
-    FeedForwardNetwork(x_n, l, n)
-
-  Create a FeedForwardNetwork flux chain model. Number of layers and neurons are variables.
-  Glorot uniform used for initialization
-
-  # Arguments
-  - `x_n::Integer`: input/output dimension
-  - `l::Integer`: number of hidden layers
-  - `n::Integer`: number of neurons in hidden layers
-  """
-
+function CNN(x_n, l, k)
   hidden = []
-  for i in l
-    layer = Flux.Dense(n => n, tanh; init=Flux.glorot_uniform, bias=true);
+  for i in range(1, l, step=1)
+    layer = Flux.Conv((k, 1), 1 => 1, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform);
     push!(hidden, layer);
   end
 
   return Flux.Chain(
-  Flux.Dense((x_n + 1) => n, tanh; init=Flux.glorot_uniform, bias=true),
     hidden...,
-    Flux.Dense(n => x_n, identity; init=Flux.glorot_uniform, bias=true),
+    Flux.Dense(x_n => x_n, identity; init=Flux.glorot_uniform, bias=true),
   )
 end
 
+function CAE(x_n, l, k)
+  encoder = []
+  decoder = []
+
+  for i in range(1, l, step=1)
+    conv = Flux.Conv((k, 1), 1 => 1, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform);
+    pool = Flux.MeanPool((2, 1), pad = SamePad());
+    push!(encoder, conv);
+    push!(encoder, pool);
+
+    upscale = Upsample(:nearest, scale = (2, 1))
+    deconv = Flux.ConvTranspose((k, 1), 1 => 1, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform);
+    push!(decoder, upscale);
+    push!(decoder, deconv);
+  end
+
+  return Flux.Chain(
+    encoder,
+    decoder,
+    Flux.Dense(x_n => x_n, identity; init=Flux.glorot_uniform, bias=true),
+  )
+end
 end
