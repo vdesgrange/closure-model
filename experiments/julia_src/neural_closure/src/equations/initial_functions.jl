@@ -2,7 +2,6 @@ module InitialFunctions
 
 export gaussian_init, random_init, high_dim_random_init, burgers_analytical_init, heat_analytical_init
 
-using Revise
 using LinearAlgebra
 using SparseArrays
 using OrdinaryDiffEq

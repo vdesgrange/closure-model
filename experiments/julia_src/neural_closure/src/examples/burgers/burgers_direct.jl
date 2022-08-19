@@ -93,14 +93,16 @@ function main()
   epochs = 20; # Iterations
   ratio = 0.75; # train/val ratio
   lr = 0.03; # learning rate
-  r = 1e-6; # weigh decay (L2 reg)
-  n = 0.01; # noise
+  r = 1e-7; # weigh decay (L2 reg)
+  n = 0.05; # noise
   b = 32;
+  hl = 3;
+  ne = 48;
 
-  data = Generator.read_dataset("./dataset/high_dim_1k_set.jld2")["training_set"];
-  model = Models.FeedForwardNetwork(x_n, 3, 64);
+  data = Generator.read_dataset("./dataset/high_dim_1k_set_j173.jld2")["training_set"];
+  model = Models.FeedForwardNetwork(x_n, hl, ne);
   K, p, _, _ = training(model, epochs, data, b, ratio, lr, n, r, true);
-  @save "./models/high_dim_1k_model.bson" K p
+  @save "./models/high_dim_1k_model_j173.bson" K p
 
   return K, p
 end
