@@ -17,6 +17,21 @@ function gaussian_init(t, x)
   return u
 end
 
+function gaussian2_init(t, x, σ, μ)
+  u = zeros(Float64, size(t, 1), size(x, 1))
+  u[1, :] .= 1 ./ (σ * sqrt.(2 * pi)) * exp.(-0.5 .* ((x .- μ) ./ σ).^2)
+  u[:, 1] .= 0
+  u[:, end] .= 0
+  return u
+end
+
+function random_gaussian_init(t, x, σ, μ)
+  d = Normal(1., 0.5)
+  σ2 = σ * rand(d)
+  μ2 = μ * rand(d)
+  return gaussian2_init(t, x, σ2, μ2)
+end
+
 function random_init(t, x)
   u = zeros(Float64, size(t, 1), size(x, 1))
   d = Normal(0, .25)
