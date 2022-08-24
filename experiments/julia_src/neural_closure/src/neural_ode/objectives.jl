@@ -24,6 +24,10 @@ function Δ_loss(K, ŷ, y, Δt)
   return Flux.mse(K(ŷ), ∂y∂t)
 end
 
+function momentum(ŷ)
+  return sum(sum(ŷ[:, 2:end, :]; dims=1) - sum(ŷ[:, 1:end-1, :]; dims=1)) + sum(sum(ŷ[:, end, :]; dims=2) - sum(ŷ[:, 1, :]; dims=2))
+end
+
 function energy(ŷ, y)
   _check_sizes(ŷ, y)
 end

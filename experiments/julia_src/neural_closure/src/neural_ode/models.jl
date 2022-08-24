@@ -2,6 +2,7 @@ module Models
 
 using Flux
 using DiffEqFlux
+include("blocks.jl")
 
 function HeatModel(x_n)
   return FastChain(
@@ -66,6 +67,33 @@ function FeedForwardNetwork(x_n, l, n)
   )
 end
 
+function FNNM(x_n, l, n)
+  """
+    FNNM(x_n, l, n)
+
+  Create a FeedForwardNetwork flux chain model. Number of layers and neurons are variables.
+  Glorot uniform used for initialization
+
+  # Arguments
+  - `x_n::Integer`: input/output dimension
+  - `l::Integer`: number of hidden layers
+  - `n::Integer`: number of neurons in hidden layers
+  """
+
+  hidden = []
+  for i in range(1, l, step=1)
+    layer = Flux.Dense(n => n, tanh; init=Flux.glorot_uniform, bias=true);
+    push!(hidden, layer);
+  end
+
+  return Flux.Chain(
+    Flux.Dense(x_n => n, tanh; init=Flux.glorot_uniform, bias=true),
+    hidden...,
+    Flux.Dense(n => x_n, identity; init=Flux.glorot_uniform, bias=true),
+    x -> MomentumX(x),
+  )
+end
+
 function CNN(x_n, l, k)
   hidden = []
   for i in range(1, l, step=1)
@@ -76,6 +104,27 @@ function CNN(x_n, l, k)
   return Flux.Chain(
     hidden...,
     Flux.Dense(x_n => x_n, identity; init=Flux.glorot_uniform, bias=true),
+  )
+end
+
+function CNN2(k)
+  return Flux.Chain(
+    x -> Block.Extend(x, Int8(floor(k / 2))),
+    x -> Block.Power2(x),
+    Flux.Conv((k, 1), 2 => 2, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    Flux.Conv((k, 1), 2 => 1, identity; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    x -> Block.Reduce(x, Int8(floor(k / 2))),
+  )
+end
+
+function CNN3(k)
+  return Flux.Chain(
+    x -> Block.Power2(x),
+    Flux.Conv((k, 1), 2 => 4, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    Flux.Conv((k, 1), 4 => 8, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    Flux.Conv((k, 1), 8 => 4, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    Flux.Conv((k, 1), 4 => 2, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    Flux.Conv((k, 1), 2 => 1, identity; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform)
   )
 end
 
@@ -105,14 +154,14 @@ end
 
 function CAE2(k)
   encoder = [
-    Flux.Conv((k, 1), 1 => 4, sigmoid; stride = 2, dilation = 2, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
-    Flux.Conv((k, 1), 4 => 8, sigmoid; stride = 2, dilation = 2, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
-    Flux.Conv((k, 1), 8 => 16, sigmoid; stride = 2, dilation = 2, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    Flux.Conv((k, 1), 1 => 4, sigmoid; stride = 2, dilation = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    # Flux.Conv((k, 1), 4 => 8, sigmoid; stride = 2, dilation = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    # Flux.Conv((k, 1), 8 => 16, sigmoid; stride = 2, dilation = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
   ];
 
   decoder = [
-    Flux.ConvTranspose((k, 1), 16 => 8, sigmoid; stride = (2, 1), dilation = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
-    Flux.ConvTranspose((k, 1), 8 => 4, sigmoid; stride = (2, 1), dilation = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    # Flux.ConvTranspose((k, 1), 16 => 8, sigmoid; stride = (2, 1), dilation = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    # Flux.ConvTranspose((k, 1), 8 => 4, sigmoid; stride = (2, 1), dilation = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
     Flux.ConvTranspose((k, 1), 4 => 1, identity; stride = (2, 1), dilation = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
   ];
 
@@ -125,6 +174,9 @@ function CAE2(k)
     # x -> reshape(x, 8, 1, 16, size(x, 2)),
     decoder...,
   )
+end
+
+function A()
 end
 
 end
