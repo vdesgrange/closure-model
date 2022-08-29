@@ -1,0 +1,37 @@
+using Flux
+
+include("blocks.jl")
+
+function CNN(x_n, l, k)
+  hidden = []
+  for i in range(1, l, step=1)
+    layer = Flux.Conv((k, 1), 1 => 1, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform);
+    push!(hidden, layer);
+  end
+
+  return Flux.Chain(
+    hidden...,
+    Flux.Dense(x_n => x_n, identity; init=Flux.glorot_uniform, bias=true),
+  )
+end
+
+function CNN2(k)
+  return Flux.Chain(
+    x -> Block.Extend(x, Int8(floor(k / 2))),
+    x -> Block.Power2(x),
+    Flux.Conv((k, 1), 2 => 2, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    Flux.Conv((k, 1), 2 => 1, identity; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    x -> Block.Reduce(x, Int8(floor(k / 2))),
+  )
+end
+
+function CNN3(k)
+  return Flux.Chain(
+    x -> Block.Power2(x),
+    Flux.Conv((k, 1), 2 => 4, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    Flux.Conv((k, 1), 4 => 8, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    Flux.Conv((k, 1), 8 => 4, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    Flux.Conv((k, 1), 4 => 2, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    Flux.Conv((k, 1), 2 => 1, identity; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform)
+  )
+end
