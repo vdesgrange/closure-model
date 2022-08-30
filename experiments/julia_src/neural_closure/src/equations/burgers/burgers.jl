@@ -93,9 +93,10 @@ function get_burgers_godunov(t, dx, x_n, nu, u0)
   end
 
   function f(u, p, t)
-    nf_u = num_flux(u, 0.);
-    u_t = zeros(size(u)[1])
-    u_t[2:end-1] = - (nf_u[2:end] - nf_u[1:end-1]) ./ dx
+    ū = zeros(size(u)[1] + 2);
+    ū[2:end-1] = deepcopy(u);
+    nf_u = num_flux(ū, 0.);
+    u_t = - (nf_u[2:end] - nf_u[1:end-1]) ./ dx
     return u_t
   end
 
