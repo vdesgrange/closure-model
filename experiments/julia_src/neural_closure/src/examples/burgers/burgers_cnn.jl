@@ -1,4 +1,4 @@
-module BurgersDirect
+module BurgersCNN
 
 using CUDA
 using BSON: @save
@@ -7,16 +7,20 @@ using OrdinaryDiffEq
 using DiffEqSensitivity
 using DiffEqFlux
 
-include("../../utils/processing_tools.jl");
-include("../../neural_ode/regularization.jl");
+include("../../utils/processing_tools.jl")
+include("../../neural_ode/regularization.jl")
+
+add_dim(x::Array{Float64, 1}) = reshape(x, (size(x)[1], 1, 1, 1))
+add_dim(x::Array) = reshape(x, (size(x)[1], 1, 1, size(x)[2]))
+del_dim(x::Array) = reshape(x, (size(x)[1], size(x)[4], size(x)[5]))
 
 function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=Tsit5(), cuda=false)
    if cuda && CUDA.has_cuda()
-      device = Flux.gpu
-      CUDA.allowscalar(false)
+      device = Flux.gpu;
+      CUDA.allowscalar(true); # false
       @info "Training on GPU"
   else
-      device = Flux.cpu
+      device = Flux.cpu;
       @info "Training on CPU"
   end
 
@@ -37,12 +41,13 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   function predict_neural_ode(x, t)
     tspan = (t[1], t[end]);
     _prob = remake(prob; u0=x, p=p, tspan=tspan);
-    device(solve(_prob, sol, u0=x, p=p, saveat=t, abstol=1e-9, reltol=1e-9, sensealg=DiffEqSensitivity.BacksolveAdjoint(autodiff=true)));
+    Array(solve(_prob, sol, u0=x, p=p, abstol=1e-9, reltol=1e-9, saveat=t, sensealg=DiffEqSensitivity.BacksolveAdjoint(autodiff=true)));
   end
 
   function loss(x, y, t)
-    x̂ = Reg.gaussian_augment(x, noise);
-    ŷ = predict_neural_ode(x̂, t[1]);
+    x̂ = Reg.gaussian_augment(add_dim(x), noise);
+    ȳ = predict_neural_ode(x̂, t[1]);
+    ŷ = del_dim(ȳ);  # ŷ = Reg.gaussian_augment(del_dim(ȳ), noise);
     l = Flux.mse(ŷ, permutedims(y, (1, 3, 2)))
     return l;
   end
@@ -57,7 +62,8 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   end
 
   function val_loss(x, y, t)
-    ŷ = predict_neural_ode(x, t[1]);
+    ȳ = predict_neural_ode(add_dim(x), t[1]);
+    ŷ = del_dim(ȳ);
     l = Flux.mse(ŷ, permutedims(y, (1, 3, 2)))
     return l;
   end
@@ -65,14 +71,13 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   function evalcb()
     lval = 0;
     for (x, y, t) in val_loader
-      (x, y, t) = (x, y, t) |> device;
       lval += val_loss(x, y, t);
     end
     lval /= (val_loader.nobs / val_loader.batchsize);
     @show(lval);
   end
 
-  @info("Initiate training")
+  @info("Train")
   trigger = Flux.plateau(() -> ltrain, 10; init_score = 1, min_dist = 1f-4);
   Flux.@epochs epochs begin
     Flux.train!(loss, Flux.params(p), train_loader, opt, cb = [traincb, evalcb]);

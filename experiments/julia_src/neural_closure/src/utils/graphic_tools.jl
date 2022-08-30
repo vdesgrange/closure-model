@@ -1,6 +1,7 @@
 module GraphicTools
 
 using Plots
+using PyPlot
 
 
 function simple_plotter(ks, title="Simple plot", L=1.)
@@ -36,12 +37,8 @@ function show_state(u, title, x="t", y="x")
     pl = heatmap(
         u,
         aspect_ratio = :equal,
-        # xlims = (1 / 2, size(u, 2) + 1 / 2),
-        # ylims = (1 / 2, size(u, 1) + 1 / 2),
     );
     heatmap!(pl,
-        #xlabel = x,
-        #ylabel = y,
         plot_title = title,
         dpi=600,
         reuse=false,
