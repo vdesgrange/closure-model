@@ -90,7 +90,7 @@ function main5()
   opt = Flux.Optimiser(Flux.WeightDecay(reg), Flux.ADAM(lr, (0.9, 0.999), 1.0e-8))
   data = Generator.read_dataset("./dataset/viscous_burgers_high_dim_m10_256_j173.jld2")["training_set"];
   model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
-  K, p, _, _ = BurgersCNN.training(model, epochs, data, opt, batch, ratio, n, Tsit5(), true);
+  K, p, _, _ = BurgersCNN.training(model, epochs, data, opt, batch, ratio, n, Tsit5());
   @save "./models/viscous_burgers_high_dim_m10_256_500epoch_model2_j173.bson" K p
 
   return K, p

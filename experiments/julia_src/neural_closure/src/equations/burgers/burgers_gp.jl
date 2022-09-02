@@ -1,20 +1,19 @@
 using Statistics
 
+"""
+  galerkin_projection(t, S, Φ, ν, dx, dt)
 
+POD-GP for non-conservative Burgers equation
+
+# Arguments
+- `t::Vector<Float>` t-axis values
+- `S::Matrix` : matrix of snapshots
+- `Φ::Vector<Float>`: pod modes
+- `ν::Float`: viscosity
+- `dx::Float`: x-axis discretization
+- `dt::Float`: t-axis discretization
+"""
 function galerkin_projection(t, S, Φ, ν, dx, dt)
-  """
-    galerkin_projection(t, S, Φ, coeff, ν, dx, dt)
-
-  POD-GP for non-conservative Burgers equation
-
-  # Arguments
-  - `t::Vector<Float>` t-axis values
-  - `S::Matrix` : matrix of snapshots
-  - `Φ::Vector<Float>`: pod modes
-  - `ν::Float`: viscosity
-  - `dx::Float`: x-axis discretization
-  - `dt::Float`: t-axis discretization
-  """
   u0 = copy(S[:, 1]);
   ū = mean(S, dims=2)[:, 1];
   n_modes = size(Φ)[2];
@@ -91,3 +90,4 @@ function galerkin_projection(t, S, Φ, ν, dx, dt)
 
   return ū .+ Φ * A;
 end
+

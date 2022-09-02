@@ -39,7 +39,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   prob = ODEProblem{false}(net, Nothing, (Nothing, Nothing));
 
   function predict_neural_ode(x, t)
-    tspan = (t[1], t[end]);
+    tspan = (float(t[1]), float(t[end]));
     _prob = remake(prob; u0=x, p=p, tspan=tspan);
     Array(solve(_prob, sol, u0=x, p=p, abstol=1e-9, reltol=1e-9, saveat=t, sensealg=DiffEqSensitivity.BacksolveAdjoint(autodiff=true)));
   end
@@ -47,7 +47,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   function loss(x, y, t)
     x̂ = Reg.gaussian_augment(add_dim(x), noise);
     ȳ = predict_neural_ode(x̂, t[1]);
-    ŷ = del_dim(ȳ);  # ŷ = Reg.gaussian_augment(del_dim(ȳ), noise);
+    ŷ = del_dim(ȳ);
     l = Flux.mse(ŷ, permutedims(y, (1, 3, 2)))
     return l;
   end
