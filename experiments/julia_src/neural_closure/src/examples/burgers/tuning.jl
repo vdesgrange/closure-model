@@ -1,6 +1,6 @@
 using Distributed
 
-pids = addprocs(10; exeflags=`--project=$(Base.active_project())`);
+pids = addprocs(15; exeflags=`--project=$(Base.active_project())`);
 
 @everywhere using Distributed
 @everywhere using Hyperopt
@@ -49,8 +49,12 @@ end
     opt = Flux.Optimiser(Flux.WeightDecay(r), Flux.ADAM(lr, (0.9, 0.999), 1.0e-8))
     K, p, _, l_val = BurgersCNN.training(model, epochs, data, opt, batch, ratio, n);
 
-    filename = "./models/cnn_viscous_256/tuning_burgers_05noise_reg_worker_" * string(myid()) * "_iter_" * string(i) * ".bson"
-    @save filename K p
+    try
+    	filename = "./models/cnn_viscous_256/tuning_burgers_05noise_reg_worker_" * string(myid()) * "_iter_" * string(i) * ".bson"
+    	@save filename K p
+    catch
+	println("Failed to register model ", i)
+    end
 
     return l_val
 end
@@ -80,12 +84,12 @@ channels = [
 #     end
 # end
 
-ho = @phyperopt for i = 15,
+ho = @phyperopt for i = 30,
     sampler = LHSampler(),
-        l = repeat(lr, 5),
-        b = repeat(batch, 5),
-        k = repeat(kernel, 5),
-        c = repeat(channels, 5)
+        l = repeat(lr, 10),
+        b = repeat(batch, 10),
+        k = repeat(kernel, 10),
+        c = repeat(channels, 10)
         # all = all_set,
         # useless = useless_set
     #print(i, "\t", all[1], "\t", all[2], "\t")
