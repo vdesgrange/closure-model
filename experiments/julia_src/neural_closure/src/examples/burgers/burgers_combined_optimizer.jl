@@ -1,4 +1,4 @@
-module BurgersCombined
+module BurgersCombinedCNN
 
 using CUDA
 using BSON: @save
@@ -13,10 +13,13 @@ include("../../utils/generators.jl")
 include("../../utils/processing_tools.jl")
 include("../../neural_ode/models.jl")
 include("../../neural_ode/regularization.jl")
-include("../../neural_ode/training.jl")
 include("./analysis.jl")
 
-function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., reg=0., cuda=true)
+add_dim(x::Array{Float64, 1}) = reshape(x, (size(x)[1], 1, 1, 1))
+add_dim(x::Array) = reshape(x, (size(x)[1], 1, 1, size(x)[2]))
+del_dim(x::Array) = reshape(x, (size(x)[1], size(x)[4], size(x)[5]))
+
+function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=Tsit5(), cuda=false)
    if cuda && CUDA.has_cuda()
       device = Flux.gpu
       CUDA.allowscalar(false)
@@ -38,25 +41,25 @@ function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., 
   p = p |> device;
   net(u, p, t) = re(p)(u);
 
-  prob = ODEProblem{false}(net, Nothing, (Nothing, Nothing));
 
   function predict_neural_ode(θ, x, t)
     tspan = (t[1], t[end]);
-    _prob = remake(prob; u0=x, p=θ, tspan=tspan);
-    device(solve(_prob, AutoTsit5(Rosenbrock23()), u0=x, p=θ, saveat=t));
+    _prob = ODEProblem(net, x, tspan, θ);
+    device(solve(_prob, sol, u0=x, p=θ, abstol=1e-6, reltol=1e-6, saveat=t, sensealg=DiffEqSensitivity.BacksolveAdjoint(autojacvec=ZygoteVJP())));
   end
 
-  function loss(θ, x, y, t) # ,x ,y, t
-    u_pred = predict_neural_ode(θ, x, t[1]);
-    ŷ = Reg.gaussian_augment(u_pred, noise);
+  function loss(θ, x, y, t)
+    x̂ = Reg.gaussian_augment(add_dim(x), noise);
+    ȳ = predict_neural_ode(θ, x̂, t[1]);
+    ŷ = del_dim(ȳ);
     l = Flux.mse(ŷ, permutedims(y, (1, 3, 2)))
     return l;
   end
 
 
   function val_loss(θ, x, y, t)
-    u_pred = predict_neural_ode(θ, x, t[1]);
-    ŷ = u_pred;
+    ȳ = predict_neural_ode(θ, add_dim(x), t[1]);
+    ŷ = del_dim(ȳ);
     l = Flux.mse(ŷ, permutedims(y, (1, 3, 2)))
     return l;
   end
@@ -79,34 +82,34 @@ function training(model, epochs, dataset, batch_size, ratio, lr=0.01, noise=0., 
   @info("Initiate training")
 
   @info("ADAMW")
-  opt = OptimizationOptimisers.ADAMW(lr, (0.9, 0.999), reg)
   optf = OptimizationFunction((θ, p, x, y, t) -> loss(θ, x, y, t), Optimization.AutoZygote())
   optprob = Optimization.OptimizationProblem(optf, p)
   result_neuralode = Optimization.solve(optprob, opt, ncycle(train_loader, epochs), callback=cb)
 
-  @info("LBFGS")
-  optprob2 = remake(optprob, u0 = result_neuralode.u)
-  result_neuralode2 = Optimization.solve(optprob2, Optim.BFGS(initial_stepnorm=0.01),
-                                          ncycle(train_loader, 100),
-                                          callback=cb,
-                                          allow_f_increases = false)
+  # @info("LBFGS")
+  # optprob2 = remake(optprob, u0 = result_neuralode.u)
+  # result_neuralode2 = Optimization.solve(optprob2, Optim.BFGS(initial_stepnorm=0.01),
+  #                                         ncycle(train_loader, 100),
+  #                                         callback=cb,
+  #                                         allow_f_increases = false)
 
-  return re(result_neuralode2.u), p, ltrain, lval
+  return re(result_neuralode.u), p, ltrain, lval
 end
 
 function main()
   x_n = 64; # Discretization
-  epochs = 100; # Iterations
-  ratio = 0.7; # train/val ratio
-  lr = 0.03; # learning rate
-  r = 1e-6; # weigh decay (L2 reg)
-  n = 0.01; # noise
-  b = 32;
+  epochs = 1; # Iterations
+  ratio = 0.75; # train/val ratio
+  lr = 0.001; # learning rate
+  reg = 1e-7; # weigh decay (L2 reg)
+  n = 0.05; # noise
+  batch = 16;
 
   # data = Generator.read_dataset("./dataset/burgers_high_dim_nu_variational_dataset.jld2")["training_set"];
-  data = Generator.read_dataset("./dataset/burgers_high_dim_training_set.jld2")["training_set"];
-  model = Models.FeedForwardNetwork(x_n, 3, 64);
-  K, p, _, _ = training(model, epochs, data, b, ratio, lr, n, r, true);
+  opt = OptimizationOptimisers.ADAMW(lr, (0.9, 0.999), reg);
+  data = Generator.read_dataset("./dataset/viscous_burgers_high_dim_m10_256_j173.jld2")["training_set"];
+  model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
+  K, p, _, _ = training(model, epochs, data, opt, batch, ratio, n, Tsit5());
 
   return K, p
 end
