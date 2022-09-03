@@ -17,7 +17,6 @@ end
 
 function gaussian_augment(x::AbstractArray{T, N}, ρ=1e-6) where {T,N}
   ϵ = ρ .* x
-  # noise = ϵ .* randn(size(x))
   x isa CuArray ? (noise = ϵ .* CUDA.randn(T, size(x))) : (noise = ϵ .* randn(T, size(x)))
   return x + noise
 end
