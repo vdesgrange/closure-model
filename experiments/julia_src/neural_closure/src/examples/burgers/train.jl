@@ -1,10 +1,12 @@
 using BSON: @save
 using Flux
 using OrdinaryDiffEq: Tsit5
+using OptimizationOptimisers
 
 include("../../neural_ode/models.jl");
 include("../../utils/generators.jl");
 include("./burgers_cnn.jl");
+include("./burgers_combined_optimizer.jl");
 
 function main()
   x_n = 64; # Discretization
@@ -85,12 +87,13 @@ function main5()
   lr = 0.001; # learning rate
   reg = 1e-7; # weigh decay (L2 reg)
   n = 0.05; # noise
-  batch = 16; # Batch size
+  batch = 16;
 
-  opt = Flux.Optimiser(Flux.WeightDecay(reg), Flux.ADAM(lr, (0.9, 0.999), 1.0e-8))
+  # data = Generator.read_dataset("./dataset/burgers_high_dim_nu_variational_dataset.jld2")["training_set"];
+  opt = OptimizationOptimisers.ADAMW(lr, (0.9, 0.999), reg);
   data = Generator.read_dataset("./dataset/viscous_burgers_high_dim_m10_256_j173.jld2")["training_set"];
   model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
-  K, p, _, _ = BurgersCNN.training(model, epochs, data, opt, batch, ratio, n, Tsit5());
+  K, p, _ = BurgersCombinedCNN.training(model, epochs, data, opt, batch, ratio, n, Tsit5());
   @save "./models/viscous_burgers_high_dim_m10_256_500epoch_model2_j173.bson" K p
 
   return K, p

@@ -10,9 +10,9 @@ using DiffEqFlux
 include("../../utils/processing_tools.jl")
 include("../../neural_ode/regularization.jl")
 
-add_dim(x::Array{Float64, 1}) = reshape(x, (size(x)[1], 1, 1, 1))
-add_dim(x::Array) = reshape(x, (size(x)[1], 1, 1, size(x)[2]))
-del_dim(x::Array) = reshape(x, (size(x)[1], size(x)[4], size(x)[5]))
+add_dim(x::Array{Float64, 1}) = reshape(x, (size(x)[1], 1, 1))
+add_dim(x::Array) = reshape(x, (size(x)[1], 1, size(x)[2]))
+del_dim(x::Array) = reshape(x, (size(x)[1], size(x)[3], size(x)[4]))
 
 function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=Tsit5(), cuda=false)
    if cuda && CUDA.has_cuda()
