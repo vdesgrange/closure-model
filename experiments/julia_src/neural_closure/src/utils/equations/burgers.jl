@@ -1,6 +1,7 @@
 using JLD2
 
 include("../processing_tools.jl")
+include("../../rom/pod.jl")
 include("../../equations/equations.jl")
 include("../../equations/initial_functions.jl")
 
@@ -10,18 +11,19 @@ include("../../equations/initial_functions.jl")
 Small processing of Burgers equation snapshot generated.
 """
 function get_burgers_batch(
-  t_max, 
-  t_min, 
-  x_max, 
-  x_min, 
-  t_n, 
-  x_n, 
-  nu, 
-  typ, 
+  tₘₐₓ,
+  tₘᵢₙ,
+  xₘₐₓ,
+  xₘᵢₙ,
+  tₙ,
+  xₙ,
+  ν,
+  typ,
   init_kwargs=(;))
-  t, u_s = burgers_snapshot_generator(t_max, t_min, x_max, x_min, t_n, x_n, nu, typ, init_kwargs)
-  u0 = copy(u_s[:, 1])
-  return t, u0, u_s
+
+  t, u = burgers_snapshot_generator(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, ν, typ, init_kwargs);
+  u₀ = copy(u[:, 1]);
+  return t, u₀, u
 end
 
 
@@ -42,21 +44,21 @@ Generate a solution to Bateman-Burgers equation
 - `init_kwargs`: other keywords arguments for initial functions
 """
 function burgers_snapshot_generator(
-  t_max,
-  t_min,
-  x_max,
-  x_min,
-  t_n,
-  x_n,
-  nu,
+  tₘₐₓ,
+  tₘᵢₙ,
+  xₘₐₓ,
+  xₘᵢₙ,
+  tₙ,
+  xₙ,
+  ν,
   typ,
   init_kwargs=(;))
 
-  t = LinRange(t_min, t_max, t_n);
-  x = LinRange(x_min, x_max, x_n);
-  dx = round((x_max - x_min) / (x_n - 1), digits=8);
+  t = LinRange(tₘᵢₙ, tₘₐₓ, tₙ);
+  x = LinRange(xₘᵢₙ, xₘₐₓ , xₙ);
+  Δx = round((xₘₐₓ - xₘᵢₙ) / (xₙ - 1), digits=8);
 
-  rand_init = rand((1, 3));
+  rand_init = rand((1, 4));
   if typ > 0
     rand_init = typ;
   end
@@ -68,11 +70,13 @@ function burgers_snapshot_generator(
     (4, (a, b) -> InitialFunctions.random_gaussian_init(a, b, init_kwargs...)), # a, b, mu, sigma
   ]);
 
-  u0 = copy(init[rand_init](t, x));
-  if ((rand_init == 3) || (nu == 0.))
-    t, u = Equations.get_burgers_godunov(t, dx, x_n, nu, u0[1, :])
+  u₀ = copy(init[rand_init](t, x));
+  if ((rand_init == 3) || (ν == 0.))
+    f = Equations.get_burgers_godunov;
+    t, u = Equations.get_burgers_godunov(t, Δx, xₙ, ν, u₀[1, :])
   else
-    t, u = Equations.get_burgers_fft(t, dx, x_n, nu, u0[1, :])
+    f = Equations.get_burgers_fft
+    t, u = Equations.get_burgers_fft(t, Δx, xₙ, ν, u₀[1, :])
   end
 
   if sum(isfinite.(u)) != prod(size(u))
@@ -149,4 +153,76 @@ function generate_burgers_training_dataset(
   end
 
   return train_set
+end
+
+
+function generate_closure_dataset(
+  n=64,
+  upscale=64,
+  filename="burgers.jld2",
+  snap_kwargs=[(;)],
+  init_kwargs=[(;)]
+  )
+
+  @assert size(snap_kwargs)[1] == n;
+  @assert size(init_kwargs)[1] == n;
+
+  train_set = [];
+  for i in range(1, n, step=1)
+    print("Generating snapshot ", i, "...")
+
+    tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, ν, typ = snap_kwargs[i];
+    tₕ, u = burgers_snapshot_generator(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ * upscale, xₙ * upscale, ν, typ, init_kwargs[i]);
+    û = ProcessingTools.downsampling(u, upscale);
+    tₗ = LinRange(tₘᵢₙ, tₘₐₓ, tₙ);
+
+    item = [tₗ, û, snap_kwargs[i], init_kwargs[i]]
+    push!(train_set, item);
+
+    println("Done")
+  end
+
+  if !isempty(filename)
+    JLD2.save(filename, name, "training_set");
+  end
+
+  return train_set
+end
+
+
+"""
+  generate_pod_gp(dataset, n, filename)
+"""
+function generate_pod_gp(dataset::Array, n::Integer, filename::String)
+  pod_gp_dataset = [];
+
+  for (i, tupl) in enumerate(dataset)
+    print("Generating pod-gp snapshot ", i, "...");
+
+    (t, u, snap_kwarg, init_kwarg) = tupl;
+    tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, ν, typ = snap_kwarg;
+    Δt = (tₘₐₓ - tₘᵢₙ) / tₙ;
+    Δx = (xₘₐₓ - xₘᵢₙ) / xₙ;
+
+    bas, ū = POD.generate_pod_basis(u, true);
+
+    Φ = bas.modes;
+    coeff = bas.coefficients;
+    λ = bas.eigenvalues;
+
+    E = POD.get_energy(λ, n);
+    print("E = ", E, "...");
+    Ū = Equations.galerkin_projection(t, u, Φ[:, 1:n], ν, Δx, Δt);
+
+    item = [t, Ū, t, u, snap_kwarg, init_kwarg];
+    push!(pod_gp_dataset, item);
+
+    println("Done");
+  end
+
+  if !isempty(filename)
+    JLD2.save(filename, name, "training_set");
+  end
+
+  return pod_gp_dataset;
 end

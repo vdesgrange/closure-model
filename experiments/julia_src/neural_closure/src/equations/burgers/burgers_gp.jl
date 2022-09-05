@@ -85,8 +85,7 @@ function galerkin_projection(t, S, Φ, ν, dx, dt)
 
     rhs = gp(a2, B_k, L_k, N_k);
     a = (1.0/3.0) * a + (2.0/3.0) * a2 + (2.0/3.0) * dt * rhs;
-
-    end
+  end
 
   return ū .+ Φ * A;
 end
