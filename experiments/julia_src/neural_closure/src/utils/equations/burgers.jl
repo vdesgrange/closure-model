@@ -183,7 +183,7 @@ function generate_closure_dataset(
   end
 
   if !isempty(filename)
-    JLD2.save(filename, name, "training_set");
+    JLD2.save(filename, "training_set", train_set);
   end
 
   return train_set
@@ -221,7 +221,7 @@ function generate_pod_gp(dataset::Array, n::Integer, filename::String)
   end
 
   if !isempty(filename)
-    JLD2.save(filename, name, "training_set");
+    JLD2.save(filename, "training_set", pod_gp_dataset);
   end
 
   return pod_gp_dataset;
