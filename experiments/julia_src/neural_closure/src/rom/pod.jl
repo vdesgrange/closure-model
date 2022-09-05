@@ -9,17 +9,17 @@ struct Basis{T}
   eigenvalues::Vector{T}
 end
 
-  """
-    generate_pod_basis(M, substract_mean::Bool = false)
+"""
+  generate_pod_basis(M, substract_mean::Bool = false)
 
-  Generate modes of Proper orthogonal decomposition. Return basis datastructure composed of modes and coefficients.
+Generate modes of Proper orthogonal decomposition. Return basis datastructure composed of modes and coefficients.
 
-  # Reference
-  ```
-  Shady E. Ahmed, Suraj Pawar, Omer San, Adil Rasheed, Traian Iliescu, and Bernd R.Noack.
-  On closures for reduced order models—a spectrum of first-principle to machine-learned avenues
-  ```
-  """
+# Reference
+```
+Shady E. Ahmed, Suraj Pawar, Omer San, Adil Rasheed, Traian Iliescu, and Bernd R.Noack.
+On closures for reduced order models—a spectrum of first-principle to machine-learned avenues
+```
+"""
 function generate_pod_basis(M, substract_mean::Bool = false)
   n = size(M, 2)
   S = copy(M);
@@ -55,12 +55,12 @@ Quality of information is measured using relative information, aka. energy.
 - `m::Integer` : number of modes
 """
 function get_energy(λ::Vector{<:Real}, m::Integer)
-  return sum(λ[1:m]; dims=1) / sum(λ; dims=1);
+  return (sum(λ[1:m]; dims=1) / sum(λ; dims=1))[1];
 end
 
-function get_energy2(λ::Vector{<:Real}, m::Integer)
-return sum(λ[m+1:end]; dims=1) / sum(λ.^2; dims=1);
-end
+# function get_energy2(λ::Vector{<:Real}, m::Integer)
+# return (sum(λ[m+1:end]; dims=1) / sum(λ.^2; dims=1))[1];
+# end
 
 """
   get_relative_projection_err(x̂, x)
