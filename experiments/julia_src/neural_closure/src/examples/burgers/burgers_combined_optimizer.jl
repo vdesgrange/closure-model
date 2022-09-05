@@ -38,7 +38,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   net(u, p, t) = re(p)(u);
 
   function predict_neural_ode(θ, x, t)
-    tspan = (t[1], t[end]);
+    tspan = (float(t[1]), float(t[end]));
     _prob = ODEProblem(net, x, tspan, θ);
     ȳ = device(solve(_prob, sol, u0=x, p=θ, abstol=1e-6, reltol=1e-6, saveat=t, sensealg=DiffEqSensitivity.BacksolveAdjoint(autojacvec=ZygoteVJP())));
     return permutedims(del_dim(ȳ), (1, 3, 2));
