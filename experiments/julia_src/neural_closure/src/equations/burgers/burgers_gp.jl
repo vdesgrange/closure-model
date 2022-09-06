@@ -1,4 +1,7 @@
 using Statistics
+using OrdinaryDiffEq
+
+include("../solvers.jl");
 
 """
   galerkin_projection(t, S, Φ, ν, dx, dt)
@@ -72,19 +75,33 @@ function galerkin_projection(t, S, Φ, ν, dx, dt)
   end
 
   a = Φ' * (u0 .- ū);
-  A = zeros(size(a)[1], size(t)[1])
 
+  # function f(dudt, u, p, t)
+  #   B_k = p[1];
+  #   L_k = p[2];
+  #   N_k = p[3];
+  #
+  #   dudt = B_k;
+  #   dudt += L_k * u;
+  #
+  #   for k in r
+  #     dudt[k] = dudt[k] + (N_k[k, :, :] * u)' * u;
+  #   end
+  #
+  #   return dudt
+  # end
+
+  # A2 = zeros(size(a)[1], size(t)[1])
+  # tspan = (t[1], t[end])
+  # prob = ODEProblem(ODEFunction(f), copy(a), tspan, (B_k, L_k, N_k))
+  # sol = solve(prob, Tsit5(), saveat=t, reltol=1e-9, abstol=1e-9) 
+  # A2 = hcat(sol.u)
+
+  g = (x) -> gp(x, B_k, L_k, N_k);
+  A = zeros(size(a)[1], size(t)[1])
   for (i, v) in enumerate(t)
     A[:, i] = copy(a);
-
-    rhs = gp(a, B_k, L_k, N_k);
-    a1 = a + dt * rhs;
-
-    rhs = gp(a1, B_k, L_k, N_k);
-    a2 = 0.75 * a + 0.25 * a1 + 0.25 * dt * rhs;
-
-    rhs = gp(a2, B_k, L_k, N_k);
-    a = (1.0/3.0) * a + (2.0/3.0) * a2 + (2.0/3.0) * dt * rhs;
+    a = Solver.tvd_rk3(g, a, dt);
   end
 
   return ū .+ Φ * A;
