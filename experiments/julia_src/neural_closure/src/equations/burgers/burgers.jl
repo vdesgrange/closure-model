@@ -6,39 +6,38 @@ using Statistics
 using Zygote
 
 
-function get_burgers_fft(t, dx, x_n, nu, u0)
+function get_burgers_fft(t, Δx, xₙ, ν, u₀)
   """
   Pseudo-spectral method
   Solve non-conservative Burgers equation with pseudo-spectral method.
   """
-  k = 2 * pi * AbstractFFTs.fftfreq(x_n, 1. / dx) # Sampling rate, inverse of sample spacing
+  k = 2 * pi * AbstractFFTs.fftfreq(xₙ, 1. / Δx) # Sampling rate, inverse of sample spacing
 
   function f(u, p, t)
     k = p[1]
-    nu = p[2]
+    ν = p[2]
 
-    u_hat = FFTW.fft(u)
-    u_hat_x = 1im .* k .* u_hat
-    u_hat_xx = (-k.^2) .* u_hat
+    û = FFTW.fft(u)
+    ûₓ = 1im .* k .* û
+    ûₓₓ = (-k.^2) .* û
 
-    u_x = FFTW.ifft(u_hat_x)
-    u_xx = FFTW.ifft(u_hat_xx)
-    u_t = -u .* u_x + nu .* u_xx
-    return real.(u_t)
+    uₓ = FFTW.ifft(ûₓ)
+    uₓₓ = FFTW.ifft(ûₓₓ)
+    uₜ = -u .* uₓ + ν .* uₓₓ
+    return real.(uₜ)
   end
 
   tspan = (t[1], t[end])
-  prob = ODEProblem(ODEFunction(f), copy(u0), tspan, (k, nu))
-  sol = solve(prob, Tsit5(), saveat=t, reltol=1e-9, abstol=1e-9) 
-  # AutoTsit5(Rosenbrock23()), 
+  prob = ODEProblem(ODEFunction(f), copy(u₀), tspan, (k, ν))
+  sol = solve(prob, Tsit5(), saveat=t, reltol=1e-8, abstol=1e-8) 
 
   return sol.t, hcat(sol.u...)
 end
 
 
-function get_burgers_ccdf(t, dx, x_n, nu, u0)
+function get_burgers_ccdf(t, Δx, xₙ, ν, u₀)
   """
-    get_burgers_ccdf(t, dx, x_n, nu, u0)
+    get_burgers_ccdf(t, Δx, xₙ, ν, u₀)
 
     Solve inviscid Burgers equation with a central difference schemes.
   Conservative Central Difference Schemes for One-Dimensional Scalar Conservation Laws
@@ -46,32 +45,32 @@ function get_burgers_ccdf(t, dx, x_n, nu, u0)
     One-Dimensional Viscous Flow in a Shock Tube by Central Difference Schemes"
 
   """
-  u02 = zeros(size(u0)[1] + 2);
-  u02[2:end-1] = copy(u0);
+  u₀2 = zeros(size(u₀)[1] + 2);
+  u₀2[2:end-1] = copy(u₀);
 
-  function num_flux(u)
+  function νm_flux(u)
     f = ((u[2:end].^2) + (u[2:end] .* u[1:end-1]) + (u[1:end-1].^2)) ./ 6
     return f
   end
 
   function f(u, p, t)
-    nf_u = num_flux(u);
+    nf_u = νm_flux(u);
 
-    u_t = zeros(size(u)[1])
-    u_t[2:end-1] = - (nf_u[2:end] - nf_u[1:end-1]) ./ dx
-    return u_t
+    uₜ = zeros(size(u)[1])
+    uₜ[2:end-1] = - (nf_u[2:end] - nf_u[1:end-1]) ./ Δx
+    return uₜ
   end
 
   tspan = (t[1], t[end])
-  prob = ODEProblem(ODEFunction(f), copy(u0), tspan, (nu))
-  sol = solve(prob, RK4(), saveat=t, reltol=1e-8, abstol=1e-8) # AutoTsit5(Rosenbrock23()), 
+  prob = ODEProblem(ODEFunction(f), copy(u₀), tspan, (ν))
+  sol = solve(prob, RK4(), saveat=t, reltol=1e-8, abstol=1e-8)
 
   return sol.t, hcat(sol.u...)
 end
 
-function get_burgers_godunov(t, dx, x_n, nu, u0)
+function get_burgers_godunov(t, Δx, xₙ, ν, u₀)
   """
-    get_burgers_godunov(t, dx, x_n, nu, u0)
+    get_burgers_godunov(t, Δx, xₙ, ν, u₀)
 
   Godunov method
   "A Difference Method for the Numerical Calculation of Discontinous Solutions of Hydrodynamic Equations"
@@ -87,7 +86,7 @@ function get_burgers_godunov(t, dx, x_n, nu, u0)
     return a .+ b;
   end
 
-  function num_flux(u, xt=0.)
+  function νm_flux(u, xt=0.)
     r = riemann(u, xt);
     return r.^2 ./ 2.;
   end
@@ -95,14 +94,63 @@ function get_burgers_godunov(t, dx, x_n, nu, u0)
   function f(u, p, t)
     ū = zeros(size(u)[1] + 2);
     ū[2:end-1] = deepcopy(u);
-    nf_u = num_flux(ū, 0.);
-    u_t = - (nf_u[2:end] - nf_u[1:end-1]) ./ dx
-    return u_t
+    nf_u = νm_flux(ū, 0.);
+    uₜ = - (nf_u[2:end] - nf_u[1:end-1]) ./ Δx
+    return uₜ
   end
 
   tspan = (t[1], t[end])
-  prob = ODEProblem(ODEFunction(f), copy(u0), tspan, (nu))
+  prob = ODEProblem(ODEFunction(f), copy(u₀), tspan, (ν))
   sol = solve(prob, AutoTsit5(Rosenbrock23()), saveat=t, reltol=1e-8, abstol=1e-8)
+
+  return sol.t, hcat(sol.u...)
+end
+
+function get_burgers_2d(t, Δ::Array{T, N}, n::Array{Integer, N}, ν, u₀) where {T, N}
+  """
+  Pseudo-spectral method
+  Solve non-conservative 2-D Burgers equation with pseudo-spectral method.
+  """
+  Δx, Δy = Δ[1], Δ[2];
+  xₙ, yₙ = n[1], n[2];
+
+  kₓ = 2 * pi * AbstractFFTs.fftfreq(xₙ, 1. / Δx) # Sampling rate, inverse of sample spacing
+  kⱼ = 2 * pi * AbstractFFTs.fftfreq(yₙ, 1. / Δy)
+
+
+  function f(uₜ, u, p, t)
+    û = FFTW.fft(u[1])
+    v̂ = FFTW.fft(u[2])
+
+    ûₓ = 1im .* kₓ .* û
+    ûₓₓ = (-kₓ.^2) .* û
+    uₓ = FFTW.ifft(ûₓ)
+    uₓₓ = FFTW.ifft(ûₓₓ)
+
+    ûⱼ = 1im .* kⱼ .* û
+    ûⱼⱼ = (-kⱼ.^2) .* û
+    uⱼ = FFTW.ifft(ûⱼ)
+    uⱼⱼ = FFTW.ifft(ûⱼⱼ)
+
+    v̂ₓ = 1im .* kₓ .* v̂
+    v̂ₓₓ = (-kₓ.^2) .* v̂
+    vₓ = FFTW.ifft(v̂ₓ)
+    vₓₓ = FFTW.ifft(v̂ₓₓ)
+
+    v̂ⱼ = 1im .* kⱼ .* v̂
+    v̂ⱼⱼ = (-kⱼ.^2) .* v̂
+    vⱼ = FFTW.ifft(v̂ⱼ)
+    vⱼⱼ = FFTW.ifft(v̂ⱼⱼ)
+
+    uₜ[1] =  real.(-u[1] .* uₓ - u[2] .* uⱼ + ν .* (uₓₓ + uⱼⱼ));
+    uₜ[2] =  real.(-u[1] .* vₓ - u[2] .* vⱼ + ν .* (vₓₓ + vⱼⱼ));
+
+    return uₜ
+  end
+
+  tspan = (t[1], t[end])
+  prob = ODEProblem(ODEFunction(f), copy(u₀), tspan, (k, ν))
+  sol = solve(prob, Tsit5(), saveat=t, reltol=1e-8, abstol=1e-8)
 
   return sol.t, hcat(sol.u...)
 end

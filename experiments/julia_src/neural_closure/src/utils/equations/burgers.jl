@@ -207,7 +207,6 @@ function generate_pod_gp(dataset::Array, n::Integer, filename::String)
     bas, ū = POD.generate_pod_basis(u, true);
 
     Φ = bas.modes;
-    coeff = bas.coefficients;
     λ = bas.eigenvalues;
 
     E = POD.get_energy(λ, n);

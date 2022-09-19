@@ -23,54 +23,79 @@ function plot_regularization(noise, reg, a, b, c, d)
     plot!(xticks=(reg,["1e-12", "1e-10", "1e-8", "1e-6", "1e-5", "1e-4", "1e-3", "1e-2", "1e-1"]))
 end
 
-function show_state(u, title, x="t", y="x")
+function show_state(u, x, y, title, xlabel, ylabel)
     """
-        show_err(a, title, x="x", y="t")
+        show_state(u, x, y, title, xlabel, ylabel=)
         Display heat map of a matrix
 
     # Arguments
     - `u`: Matrix
+    - `x`: x axis values
+    - `y`: y axis values
     - `title::String`: title of the heatmap
-    - `x::String`: x label
-    - `y::String`: y label
+    - `xlabel::String`: x axis label
+    - `ylabel::String`: y axis label
     """
-    pl = heatmap(
-        u,
-        aspect_ratio = :equal,
-    );
+    pyplot();
+
+    xₙ, yₙ = size(x)[1], size(y)[1];
+    xₘᵢₙ, xₘₐₓ = x[1], x[end];
+    yₘᵢₙ, yₘₐₓ = y[1], y[end];
+
+    xformatter = x -> string(round(x / xₙ * xₘₐₓ + xₘᵢₙ, digits=2));
+    yformatter = y -> string(round(y / yₙ * yₘₐₓ + yₘᵢₙ, digits=2));
+
+    pl = heatmap(u);
     heatmap!(pl,
-        plot_title = title,
+        title = title,
         dpi=600,
+        aspect_ratio = :equal,
         reuse=false,
+        c=:dense,
+        xlabel=xlabel,
+        ylabel=ylabel,
+        xticks=(1:7:size(x)[1], [xformatter(x) for x in 0:7:size(x)[1]]),
+        yticks=(1:7:size(y)[1], [yformatter(y) for y in 0:7:size(y)[1]]),
     );
-    return pl
+
+    return pl;
 end
 
-function show_err(a, b, title, x="x", y="t")
+function show_err(u, û, x, y, title, xlabel, ylabel)
     """
-        show_err(a, b, title, x="x", y="t")
-        Display heat map of absolute error between 2 matrices.
+        show_err(u, û, x, y, title, xlabel, ylabel)
+        Display absolute difference between 2 matrices.
 
     # Arguments
-    - `a`: Matrix
-    - `b`: Matrix
+    - `u`: Matrix
+    - `û`: Matrix
+    - `x`: x axis values
+    - `y`: y axis values
     - `title::String`: title of the heatmap
     - `x::String`: x label
     - `y::String`: y label
     """
-    pl = heatmap(
-        abs.(a .- b),
-        aspect_ratio = :equal,
-        c = :dense,
-    );
+    pyplot();
+    xₙ, yₙ = size(x)[1], size(y)[1];
+    xₘᵢₙ, xₘₐₓ = x[1], x[end];
+    yₘᵢₙ, yₘₐₓ = y[1], y[end];
+
+    xformatter = x -> string(round(x / xₙ * xₘₐₓ + xₘᵢₙ, digits=2));
+    yformatter = y -> string(round(y / yₙ * yₘₐₓ + yₘᵢₙ, digits=2));
+
+    pl = heatmap(abs.(u .- û), c=:dense);
     heatmap!(pl,
-        c = :devon,
-        ylabel = y,
-        xlabel = x,
-        plot_title = title,
-        dpi=200,
+        title = title,
+        dpi=600,
+        aspect_ratio = :equal,
+        reuse=false,
+        xlabel=xlabel,
+        ylabel=ylabel,
+        xticks=(1:7:size(x)[1], [xformatter(x) for x in 0:7:size(x)[1]]),
+        yticks=(1:7:size(y)[1], [yformatter(y) for y in 0:7:size(y)[1]]),
     );
-    return pl
+
+    return pl;
 end
 
 end
