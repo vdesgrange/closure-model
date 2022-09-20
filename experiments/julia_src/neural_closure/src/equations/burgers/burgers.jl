@@ -16,6 +16,8 @@ function get_burgers_fft(t, Δx, xₙ, ν, u₀)
   function f(u, p, t)
     k = p[1]
     ν = p[2]
+    # u[1] = 0.
+    # u[end] = 0.
 
     û = FFTW.fft(u)
     ûₓ = 1im .* k .* û
