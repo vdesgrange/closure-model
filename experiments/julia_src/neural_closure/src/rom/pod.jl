@@ -13,6 +13,7 @@ end
   generate_pod_basis(M, substract_mean::Bool = false)
 
 Generate modes of Proper orthogonal decomposition. Return basis datastructure composed of modes and coefficients.
+Method solving eigenproblem.
 
 # Reference
 ```
@@ -29,20 +30,44 @@ function generate_pod_basis(M, substract_mean::Bool = false)
       S .-= sm;
   end
 
-  C = S'S;
-  E = eigen(C);
+  C = S' * S;
+  E = eigen!(C);
   λ = E.values;
   W = E.vectors;
 
-  idx = sortperm(abs.(λ) / n, rev=true)
+  idx = sortperm(abs.(λ) / n, rev=true) # removed abs.(λ)
   λ = λ[idx]
   W = W[:, idx]
 
-  D = sqrt.(abs.(λ))
-  θ = real(S * W) * Diagonal(1 ./ D) # Modes
-  A = θ' * S # Coefficients
+  D = sqrt.(abs.(λ));
+  θ = S * W * Diagonal(1 ./ D);
+  # A = Diagonal(D) * W';
+  A = θ' * S;
 
-  return Basis(θ, A, λ), sm
+  return Basis(θ, A, abs.(λ)), sm
+end
+
+"""
+  generate_pod_svd_basis(M, substract_mean::Bool = false)
+
+Generate modes of Proper orthogonal decomposition. Return basis datastructure composed of modes and coefficients.
+Method using SVD.
+"""
+function generate_pod_svd_basis(M, subtractmean::Bool = false)
+    S = copy(M);
+
+    sm = mean(S, dims=2);
+    if subtractmean
+        S .-= sm;
+    end
+
+    F = svd!(S)
+    θ = F.U # -1 * F.U corresponds to paper results but generate bad reconstruction
+    λ = F.S
+    A = Diagonal(F.S)*F.Vt
+
+    return Basis(θ, A, λ), sm
+
 end
 
 """
