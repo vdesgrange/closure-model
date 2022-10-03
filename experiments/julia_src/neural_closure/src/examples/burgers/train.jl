@@ -8,6 +8,15 @@ include("../../utils/generators.jl");
 include("./burgers_cnn.jl");
 include("./burgers_combined_optimizer.jl");
 
+
+"""
+  main()
+
+  Train convolutional neural network using Flux library on inviscid burgers equation.
+  Using high dimensional random initial condition
+  CNN composed of 4 hidden layers [2, 4, 4, 2, 1].
+  Optimisation algorithm imported from Flux.
+"""
 function main()
   x_n = 64; # Discretization
   epochs = 500; # Iterations
@@ -26,6 +35,14 @@ function main()
   return K, p
 end
 
+"""
+  main2()
+
+  Train convolutional neural network using Flux library on inviscid burgers equation.
+  Using high dimensional random initial condition
+  CNN composed of 2 hidden layers [2, 2, 1].
+  Optimisation algorithm imported from Flux.
+"""
 function main2()
   x_n = 64; # Discretization
   epochs = 500; # Iterations
@@ -44,6 +61,14 @@ function main2()
   return K, p
 end
 
+"""
+  main3()
+
+  Train convolutional neural network using Flux library on inviscid burgers equation.
+  Using gaussian random initial condition (single shock)
+  CNN composed of 2 hidden layers [2, 2, 1].
+  Optimisation algorithm imported from Flux.
+"""
 function main3()
   x_n = 64; # Discretization
   epochs = 500; # Iterations
@@ -62,6 +87,14 @@ function main3()
   return K, p
 end
 
+"""
+  main4()
+
+  Train convolutional neural network using Flux library on viscous burgers equation.
+  Optimisation algorithm imported from Flux.
+  Using high dimensional random initial condition.
+  CNN composed of 6 hidden layers [2, 4, 8, 8, 4, 2, 1].
+"""
 function main4()
   x_n = 64; # Discretization
   epochs = 500; # Iterations
@@ -80,6 +113,14 @@ function main4()
   return K, p
 end
 
+"""
+  main5()
+
+  Fast training of convolutional neural network on viscous burgers equation.
+  Optimisation algorithm imported from OptimizationOptimisers.
+  Using high dimensional random initial condition.
+  CNN composed of 6 hidden layers [2, 4, 8, 8, 4, 2, 1].
+"""
 function main5()
   x_n = 64; # Discretization
   epochs = 500; # Iterations
@@ -115,3 +156,4 @@ function main6()
 
   return K, p
 end
+

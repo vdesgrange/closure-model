@@ -189,6 +189,42 @@ function generate_closure_dataset(
   return train_set
 end
 
+"""
+  generate_pod(dataset, n, filename)
+"""
+function generate_pod(dataset::Array, n::Integer, filename::String)
+  pod_dataset = [];
+
+  for (i, tupl) in enumerate(dataset)
+    print("Generating POD snapshot ", i, "...");
+
+    (t, u, snap_kwarg, init_kwarg) = tupl;
+    tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, ν, typ = snap_kwarg;
+    Δt = (tₘₐₓ - tₘᵢₙ) / tₙ;
+    Δx = (xₘₐₓ - xₘᵢₙ) / xₙ;
+
+    bas, ū = POD.generate_pod_basis(u, true);
+    Φ = bas.modes;
+    A = bas.coefficients;
+    λ = bas.eigenvalues;
+
+    E = POD.get_energy(λ, n);
+    print("E = ", E, "...");
+
+    Ū = ū .+ Φ[:, 1:n] * A[1:n, :];
+
+    item = [t, Ū, t, u, snap_kwarg, init_kwarg];
+    push!(pod_dataset, item);
+
+    println("Done");
+  end
+
+  if !isempty(filename)
+    JLD2.save(filename, "training_set", pod_dataset);
+  end
+
+  return pod_dataset;
+end
 
 """
   generate_pod_gp(dataset, n, filename)
@@ -213,7 +249,7 @@ function generate_pod_gp(dataset::Array, n::Integer, filename::String)
     print("E = ", E, "...");
     Ū = Equations.galerkin_projection(t, u, Φ[:, 1:n], ν, Δx, Δt);
 
-    item = [t, Ū, t, u, snap_kwarg, init_kwarg];
+    item_gp = [t, Ū, t, u, snap_kwarg, init_kwarg];
     push!(pod_gp_dataset, item);
 
     println("Done");

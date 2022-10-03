@@ -53,6 +53,34 @@ initial conditions - high_dim
 m = 10
 ```
 
+Inviscid burgers dataset using advecting shock initial condition (analytical solution from paper Malik 2020).
+```
+inviscid_burgers_advecting_shock_t2_4_j173.jld2
+Julia 1.7.3
+4
+t in [0., 2.]
+x in [0., 1.]
+t_n, x_n = 64, 64
+upscale = 64
+initial conditions - advecting shock
+nu = 0.001
+```
+
+POD Galerkin projection from inviscid burgers dataset 
+using advecting shock initial condition (analytical solution from paper Malik 2020).
+```
+inviscid_burgers_advecting_shock_podgp_t2_4_j173.jld2
+Julia 1.7.3
+POD Galerkin projection
+4
+t in [0., 2.]
+x in [0., 1.]
+t_n, x_n = 64, 64
+upscale = 64
+initial conditions - advecting shock
+nu = 0.001
+```
+
 ```
 high_dim_1k_set.jld2
 Julia 1.6.3
