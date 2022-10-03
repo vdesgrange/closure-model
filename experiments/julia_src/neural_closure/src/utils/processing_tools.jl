@@ -76,7 +76,7 @@ function process_closure_dataset(dataset)
   for i in range(1, size(dataset, 1), step=1)
     t, ū, _, u, _, _ = dataset[i];
 
-    push!(init_set, copy(u[:, 1]));
+    push!(init_set, copy(ū[:, 1])); # must test with rom and fom for initial conditions
     push!(rom_set, copy(ū));
     push!(true_set, copy(u));
   end
