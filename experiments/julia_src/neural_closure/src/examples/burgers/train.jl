@@ -141,18 +141,18 @@ end
 
 function main6()
   x_n = 64; # Discretization
-  epochs = 50; # Iterations
+  epochs = 200; # Iterations
   ratio = 0.75; # train/val ratio
   lr = 0.003; # learning rate
   reg = 1e-7; # weigh decay (L2 reg)
-  n = 0.1; # noise
-  batch = 16;
+  n = 0.; # noise
+  batch = 3;
 
   opt = OptimizationOptimisers.ADAMW(lr, (0.9, 0.999), reg);
-  data = Generator.read_dataset("./dataset/viscous_burgers_high_dim_m10_256_j173.jld2")["training_set"];
+  data = Generator.read_dataset("./dataset/inviscid_burgers_advecting_shock_t2_4_j173.jld2")["training_set"];
   model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
   K, p, _ = BurgersCombinedCNN.training(model, epochs, data, opt, batch, ratio, n, Tsit5());
-  @save "./models/inviscid_burgers_high_dim_m10_256_500epoch_model2_j173.bson" K p
+  @save "./models/inviscid_burgers_advecting_shock_t2_4_j173.bson" K p
 
   return K, p
 end

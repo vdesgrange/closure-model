@@ -1,4 +1,4 @@
-module BurgersCombinedCNN
+# module BurgersClosure
 
 using CUDA
 using BSON: @save
@@ -13,7 +13,21 @@ include("../../neural_ode/regularization.jl")
 
 del_dim(x::Array) = reshape(x, (size(x)[1], size(x)[3], size(x)[4]))
 
+function f(u, p, t)
+  k = p[1]
+  ν = p[2]
+  # u[1] = 0.
+  # u[end] = 0.
 
+  û = FFTW.fft(u)
+  ûₓ = 1im .* k .* û
+  ûₓₓ = (-k.^2) .* û
+
+  uₓ = FFTW.ifft(ûₓ)
+  uₓₓ = FFTW.ifft(ûₓₓ)
+  uₜ = -u .* uₓ + ν .* uₓₓ
+  return real.(uₜ)
+end
 
 function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=Tsit5(), cuda=false)
    if cuda && CUDA.has_cuda()
@@ -31,31 +45,56 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   lval = 0.;
 
   @info("Loading dataset")
-  (train_loader, val_loader) = ProcessingTools.get_data_loader_cnn(dataset, batch_size, ratio, false, cuda);
+  (train_loader, val_loader) = ProcessingTools.get_data_loader(dataset, batch_size, ratio, false, cuda);
 
   @info("Building model")
   model_gpu = model |> device;
   p, re = Flux.destructure(model_gpu);
   p = p |> device;
-  net(u, p, t) = re(p)(u);
 
-  function predict_neural_ode(θ, x, t)
-    tspan = (float(t[1]), float(t[end]));
-    _prob = ODEProblem(net, x, tspan, θ);
-    ȳ = device(solve(_prob, sol, u0=x, p=θ, abstol=1e-6, reltol=1e-6, saveat=t, sensealg=DiffEqSensitivity.BacksolveAdjoint(autojacvec=ZygoteVJP())));
-    return permutedims(del_dim(ȳ), (1, 3, 2));
+  net(u, p, t) = re(p)(u);
+  f_pod(u, p, t) = Φ * Φ' * f(u, p, t)
+
+  function f_NN_ϵ(u, p, t)
+    θ, k, ν, Φ = p[1], p[2], p[3], p[4];
+    # n = size(u)[1];
+    # bas, _ = POD.generate_pod_svd_basis(reshape(Array(u), n, :), false);
+
+    du = f_pod(u, (k, ν, Φ), t);
+    ϵ = net(u, θ, t);
+    du + ϵ
   end
 
+  function f_NN(u, p, t)
+    θ = p[1];
+    net(u, θ, t);
+  end
+
+  function predict_neural_ode(θ, x, t, Φ)
+    tspan = (float(t[1]), float(t[end]));
+    xₙ = size(x);
+    Δx = 1. / xₙ;
+    k = 2 * pi * AbstractFFTs.fftfreq(xₙ, 1. / Δx);
+
+    _prob = ODEProblem(f_NN, x, tspan, (θ, k, ν, Φ));
+    ŷ = device(solve(_prob, sol, u0=x, p=θ, abstol=1e-9, reltol=1e-9, saveat=t));
+    return permutedims(del_dim(ŷ), (1, 3, 2)); # del_dim(ŷ)
+  end
+
+  #loss(p) = loss_derivative_fit(p, U, 1e-8)
+
   function loss(θ, x, y, t)
+    bas, _ = POD.generate_pod_svd_basis(reshape(Array(y), size(y)[1], :), false);
     x̂ = Reg.gaussian_augment(x, noise);
-    ŷ = predict_neural_ode(θ, x̂, t[1]);
-    l = Flux.mse(ŷ, y)
+    ŷ = predict_neural_ode(θ, x̂, t[1], bas.modes[:, 1:3]);
+    l = Flux.mse(ȳ .+ ŷ, y)
     return l;
   end
 
   function val_loss(θ, x, y, t)
-    ŷ = predict_neural_ode(θ, x, t[1]);
-    l = Flux.mse(ŷ, y)
+    bas, _ = POD.generate_pod_svd_basis(reshape(Array(y), size(y)[1], :), false);
+    ŷ = predict_neural_ode(θ, x, t[1], bas.modes[:, 1:3]);
+    l = Flux.mae(ȳ .+ ŷ, y)
     return l;
   end
 
@@ -82,19 +121,36 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   end
 
   @info("Initiate training")
-  @info("ADAMW")
+  @info("ADAMW")  # 70
   optf = OptimizationFunction((θ, p, x, y, t) -> loss(θ, x, y, t), Optimization.AutoZygote())
   optprob = Optimization.OptimizationProblem(optf, p)
   result_neuralode = Optimization.solve(optprob, opt, ncycle(train_loader, epochs), callback=cb)
 
-  # @info("LBFGS")
-  # optprob2 = remake(optprob, u0 = result_neuralode.u)
-  # result_neuralode2 = Optimization.solve(optprob2, Optim.BFGS(initial_stepnorm=0.01),
-  #                                         ncycle(train_loader, 100),
-  #                                         callback=cb,
-  #                                         allow_f_increases = false)
-
   return re(result_neuralode.u), p, lval
 end
 
-end
+# end
+
+
+using OrdinaryDiffEq: Tsit5
+using OptimizationOptimisers
+include("../../neural_ode/models.jl");
+include("../../utils/generators.jl");
+include("./burgers_cnn.jl");
+include("./burgers_combined_optimizer.jl");
+
+x_n = 64; # Discretization
+epochs = 100; # Iterations
+ratio = 0.75; # train/val ratio
+lr = 0.003; # learning rate
+reg = 1e-7; # weigh decay (L2 reg)
+n = 0.; # noise
+batch = 3;
+
+opt = OptimizationOptimisers.ADAMW(lr, (0.9, 0.999), reg);
+data = Generator.read_dataset("./dataset/inviscid_burgers_advecting_shock_nu0001_t2_4_j173.jld2")["training_set"];
+model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
+K, p, _ = BurgersCombinedCNN.training(model, epochs, data, opt, batch, ratio, n, Tsit5());
+#@save "./models/inviscid_burgers_advecting_shock_t2_4_j173.bson" K p
+
+return K, p
