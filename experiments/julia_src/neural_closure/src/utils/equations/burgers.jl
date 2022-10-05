@@ -249,7 +249,7 @@ function generate_pod_gp(dataset::Array, n::Integer, filename::String)
     print("E = ", E, "...");
     Ū = Equations.galerkin_projection(t, u, Φ[:, 1:n], ν, Δx, Δt);
 
-    item_gp = [t, Ū, t, u, snap_kwarg, init_kwarg];
+    item = [t, Ū, t, u, snap_kwarg, init_kwarg];
     push!(pod_gp_dataset, item);
 
     println("Done");
