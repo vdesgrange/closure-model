@@ -23,6 +23,7 @@ function CNN2(k, channels)
     push!(hidden, layer);
   end
 
+  # (nx, 1, nsample) -> CNN -> (nx, 1, nsample)
   return Flux.Chain(
     x -> Block.Extend(x, Int8(floor(k / 2))),
     x -> Block.Power2(x),
