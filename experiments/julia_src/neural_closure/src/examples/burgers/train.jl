@@ -7,6 +7,7 @@ include("../../neural_ode/models.jl");
 include("../../utils/generators.jl");
 include("./burgers_cnn.jl");
 include("./burgers_combined_optimizer.jl");
+include("./burgers_closure_2.jl");
 
 
 """
@@ -169,10 +170,43 @@ function main7()
 
   opt = OptimizationOptimisers.ADAMW(lr, (0.9, 0.999), reg);
   
-  data = Generator.read_dataset("./dataset/inviscid_burgers_high_dim_m10_256_t2_j173.jld2")["training_set"];
+  data = Generator.read_dataset("./dataset/inviscid_burgers_high_dim_m10_256_j173.jld2")["training_set"];
   model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
   K, p, _ = BurgersCombinedCNN.training(model, epochs, data, opt, batch, ratio, n, Tsit5());
   @save "./models/inviscid_burgers_high_dim_m10_256_t2_j173.bson" K p
 
   return K, p
 end
+
+function main8()
+  epochs = 2; # Iterations
+  ratio = 0.75; # train/val ratio
+  lr = 0.003; # learning rate
+  reg = 1e-7; # weigh decay (L2 reg)
+  noise = 0.; # noise
+  batch_size = 16;
+  noise = 0.;
+  sol = Tsit5();
+
+  ν = 0.;
+  t_max = 2.;
+  t_min = 0.;
+  x_max = pi;
+  x_min = 0.;
+  tₙ = 64;
+  xₙ = 64;
+  t =  LinRange(t_min, t_max, tₙ);
+  x =  LinRange(x_min, x_max, xₙ);
+  snap_kwargs = (; xₙ, ν);
+  init_kwargs = (; m=10);
+
+  opt = OptimizationOptimisers.ADAMW(lr, (0.9, 0.999), reg);
+  dataset = Generator.read_dataset("./dataset/inviscid_burgers_high_dim_m10_256_j173.jld2")["training_set"];
+  model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
+  K, p, Φ, _ = BurgersClosure.training(model, epochs, dataset, opt, batch_size, ratio, noise, Tsit5(), snap_kwargs);
+  @save "./models/closure_inviscid_burgers_high_dim_m10_256_t2_j173.bson" K p Φ
+
+  return K, p, Φ
+end
+
+K, p, Φ = main8()
