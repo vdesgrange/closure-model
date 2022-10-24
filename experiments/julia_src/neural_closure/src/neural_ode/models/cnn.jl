@@ -33,13 +33,20 @@ function CNN2(k, channels)
   )
 end
 
-function CNN3(k)
+function CNN3(k, channels)
+  hidden = []
+
+  for (c1, c2) in zip(channels[1:end-2], channels[2:end-1])
+    layer = Flux.Conv((k,), c1 => c2, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform);
+    push!(hidden, layer);
+  end
+
+  # (nx, 1, nsample) -> CNN -> (nx, 1, nsample)
   return Flux.Chain(
-    x -> Block.Power2(x),
-    Flux.Conv((k, 1), 2 => 4, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
-    Flux.Conv((k, 1), 4 => 8, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
-    Flux.Conv((k, 1), 8 => 4, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
-    Flux.Conv((k, 1), 4 => 2, tanh; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
-    Flux.Conv((k, 1), 2 => 1, identity; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform)
+    x -> Block.Extend(x, Int8(floor(k / 2))),
+    x -> Block.Power3(x),
+    hidden...,
+    Flux.Conv((k,), channels[end-1] => channels[end], identity; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
+    x -> Block.Reduce(x, Int8(floor(k / 2))),
   )
 end

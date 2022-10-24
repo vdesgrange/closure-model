@@ -31,4 +31,8 @@ function Power2(x::AbstractArray{T, N}) where {T, N}
   Array{T}(cat(deepcopy(x), deepcopy(x.^2); dims=2))
 end
 
+function Power3(x::AbstractArray{T, N}) where {T, N}
+  Array{T}(cat(deepcopy(x), deepcopy(x.^2), deepcopy(x.^3); dims=2))
+end
+
 end

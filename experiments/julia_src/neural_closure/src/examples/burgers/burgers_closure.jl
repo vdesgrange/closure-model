@@ -12,6 +12,8 @@ using OptimizationOptimisers
 using IterTools: ncycle
 using CUDA
 using BSON: @save
+using Printf
+using Plots
 
 include("../../neural_ode/models.jl")
 include("../../utils/processing_tools.jl")
@@ -21,19 +23,30 @@ include("../../utils/generators.jl")
 include("../..//utils/graphic_tools.jl")
 
 x_n = 64; # Discretization
-epochs = 50; # Iterations
+epochs = 100; # Iterations
 ratio = 0.75; # train/val ratio
 lr = 0.003; # learning rate
 reg = 1e-7; # weigh decay (L2 reg)
 noise = 0.; # noise
-batch_size = 3;
+batch_size = 16;
 sol = Tsit5();
 cuda = false;
+
 ν = 0.;
+t_max = 2.;
+t_min = 0.;
+x_max = pi;
+x_min = 0.;
+t_n = 64;
+x_n = 64;
+t =  LinRange(t_min, t_max, t_n);
+x =  LinRange(x_min, x_max, x_n);
+
 
 opt = OptimizationOptimisers.ADAMW(lr, (0.9, 0.999), reg);
-# dataset = Generator.read_dataset("./dataset/inviscid_burgers_advecting_shock_nu0001_t2_4_j173.jld2")["training_set"];
-model = Models.CNN2(9, [2, 2, 1]);
+dataset = Generator.read_dataset("./dataset/inviscid_burgers_high_dim_m10_256_j173.jld2")["training_set"];
+model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
+model = Models.FeedForwardNetwork(x_n, 3, 48);
 
 # =======
 
@@ -93,10 +106,10 @@ function f3(u, p, t)
   return uₜ
 end
 
-snap_kwargs = repeat([(; t_max=2., t_min=0., x_max=pi, x_min=0., t_n=100, x_n=64, nu=0., typ=2)], 16);
+snap_kwargs = repeat([(; t_max, t_min, x_max, x_min, t_n, x_n, nu=ν, typ=2)], 16);
 init_kwargs = repeat([(;  m=10 )], 16);
-new_dataset = Generator.generate_closure_dataset(16, 1, "", snap_kwargs, init_kwargs);
-GraphicTools.show_state(new_dataset[1][2], LinRange(0., 2., 100), LinRange(0., pi, 64), "", "t", "x")
+dataset = Generator.generate_closure_dataset(16, 1, "", snap_kwargs, init_kwargs);
+GraphicTools.show_state(dataset[1][2], t, x, "", "t", "x")
 
 
 # function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=Tsit5(), cuda=false)
@@ -105,7 +118,7 @@ GraphicTools.show_state(new_dataset[1][2], LinRange(0., 2., 100), LinRange(0., p
   global lval = 0.;
 
   @info("Loading dataset")
-  (train_loader, val_loader) = ProcessingTools.get_data_loader_cnn(new_dataset, batch_size, ratio, false, cuda);
+  (train_loader, val_loader) = ProcessingTools.get_data_loader_cnn(dataset, batch_size, ratio, false, cuda);
   
   tmp = [];
   for (x, y, t) in train_loader
@@ -117,13 +130,11 @@ GraphicTools.show_state(new_dataset[1][2], LinRange(0., 2., 100), LinRange(0., p
   Δx = 1. / xₙ;
   k = 2 * pi * AbstractFFTs.fftfreq(xₙ, 1. / Δx);
   bas, _ = POD.generate_pod_svd_basis(reshape(Array(u_ref), xₙ, :), false);
-  Φ = bas.modes[:, 1:3];
-
+  Φ = bas.modes[:, 1:5];
 
   @info("Building model")
-  model
   p, re = Flux.destructure(model);
-  re(p)(u₀)
+
   f_ref =  (u, p, t) -> begin
     y = f2(u, (k, ν), t)
     y = reshape(y, size(y, 1), size(y, 3))
@@ -131,21 +142,18 @@ GraphicTools.show_state(new_dataset[1][2], LinRange(0., 2., 100), LinRange(0., p
     y = reshape(y, size(y, 1), 1, size(y, 2))
     y
   end
+
   f_nn =  (u, p, t) -> re(p)(u)
 
   function f_closure(u, p, t)
-    y = f2(u, (k, ν), t)
-    y = reshape(y, size(y, 1), size(y, 3))
-    y = Φ * (Φ' * y)
-    y = reshape(y, size(y, 1), 1, size(y, 2))
-    y + re(p)(u)
+    f_ref(u, (k, ν), t) + f_nn(u, p, t)
   end
 
   
   function predict_neural_ode(θ, x, t)
     # _prob = SplitODEProblem(f_ref,  f_nn, x,  extrema(t),  θ, saveat=t);
     _prob = ODEProblem(
-        f_closure,
+        f_nn,
         x,
         extrema(t), 
         θ,
@@ -156,7 +164,17 @@ GraphicTools.show_state(new_dataset[1][2], LinRange(0., 2., 100), LinRange(0., p
     return permutedims(del_dim(ȳ), (1, 3, 2));
   end
 
-  function loss_derivative_fit(θ, x, y, t)
+  function loss_derivative_fit2(θ, u, λ)
+    t = 0.0
+    dudt_ref = f2(u, (k, ν), t)
+    dudt_predict = f_nn(u, θ, t) #  f_pod(u, ν, t) +
+    data = sum(abs2, dudt_predict - dudt_ref) / length(u)
+    reg = sum(abs2, p) / length(p)
+    data + λ * reg
+  end
+
+
+  function loss_derivative_fit(θ, x, y, t) # correct ! time step by time step
     sum(eachslice(y; dims = 2)) do y
       y = reshape(y, size(y, 1), 1, :)
       dŷ = f_closure(y, θ, t)
@@ -167,13 +185,6 @@ GraphicTools.show_state(new_dataset[1][2], LinRange(0., 2., 100), LinRange(0., p
   end
   
   function loss_trajectory_fit(θ, x, y, t)
-    x̂ = Reg.gaussian_augment(x, noise);
-    ŷ = predict_neural_ode(θ, x̂, t[1]);
-    l = Flux.mse(ŷ, y)
-    return l;
-  end
-
-  function loss(θ, x, y, t)
     x̂ = Reg.gaussian_augment(x, noise);
     ŷ = predict_neural_ode(θ, x̂, t[1]);
     l = Flux.mse(ŷ, y)
@@ -198,7 +209,7 @@ GraphicTools.show_state(new_dataset[1][2], LinRange(0., 2., 100), LinRange(0., p
       global lval = 0;
 
       for (x, y, t) in val_loader
-        (x, y, t) = (x, y, t) |> device;
+        # (x, y, t) = (x, y, t) |> device;
         global lval += val_loss(θ, x, y, t);
       end
 
@@ -221,43 +232,59 @@ GraphicTools.show_state(new_dataset[1][2], LinRange(0., 2., 100), LinRange(0., p
   optprob = Optimization.OptimizationProblem(optf, p);
   result_neuralode = Optimization.solve(optprob, opt, ncycle(train_loader, epochs), callback=cb)
 
-  # return re(result_neuralode.u), p, lval
+  # return re(result_neuralode.u), result_neuralode.u, lval
 # end
 
-t, u = new_dataset[1];
-x = LinRange(0., pi, xₙ)
-u₀ = reshape(u[:, 1], :, 1, 1);
-θ = result_neuralode.u
-prob = SplitODEProblem(merde1, merde2, u₀, extrema(t), θ, saveat=t);
-tmp = solve(prob, Tsit5())
-U = Array(tmp)
+prob = ODEProblem(f_ref, u₀, extrema(t), θ, saveat=t);
+U = Array(solve(prob, Tsit5()))
 GraphicTools.show_state(U[:, 1, 1, :], t, x, "", "t", "x")
 
+
+t, u = dataset[1];
+ux = LinRange(0., pi, xₙ)
+u₀ = reshape(u[:, 1], :, 1, 1);
+θ = result_neuralode.u
+# prob = SplitODEProblem(f_ref, f_nn, u₀, extrema(t), θ, saveat=t);
+prob = ODEProblem(f_closure, u₀, extrema(t), θ, saveat=t);
+U = Array(solve(prob, Tsit5()))
+GraphicTools.show_state(U[:, 1, 1, :], t, x, "", "t", "x")
+GraphicTools.show_state( u, t, x, "", "t", "x")
+
 # end
-K = re(result_neuralode.u)
-p = Flux.params(K);
 
 add_dim(x::Array{Float64, 1}) = reshape(x, (size(x)[1], 1, 1))
-t, u = new_dataset[1];
+t, u = dataset[1];
 x = LinRange(0., pi, xₙ)
 u₀ = reshape(u[:, 1], :, 1, 1);
 θ = p
 size(u₀)
 
-prob = SplitODEProblem(merde1, merde2, u₀, extrema(t), θ, saveat=t);
-tmp = solve(prob, Tsit5())
-U = Array(tmp)
-GraphicTools.show_state(U[:, 1, 1, :], t, x, "", "t", "x")
-GraphicTools.show_state( u, t, x, "", "t", "x")
+# function check_result(nn, res, typ)
+using BSON: @save, @load
+@load "./models/inviscid_burgers_high_dim_m10_256_t2_j173.bson" K p
+θ = Flux.params(K)
 
+  add_dim(x::Array{Float64, 1}) = reshape(x, (size(x)[1], 1, 1))
+  t, u₀, u = Generator.get_burgers_batch(2., 0., pi, 0., 64, 64, 0., 2, (; m=10));
+  # prob = SplitODEProblem(f_ref, f_nn, add_dim(u₀), extrema(t), θ, saveat=t);
+  # U = Array(solve(prob, Tsit5()))
+  prob = DiffEqFlux.NeuralODE(K,  extrema(t), Tsit5(), saveat=t);
+  U = Array(prob(add_dim(u₀)))
+  GraphicTools.show_state(u, t, x, "", "t", "x")
+  GraphicTools.show_state(U[:, 1, 1, :], t, x, "", "t", "x")
 
-prob = ODEProblem(merde2, u₀, extrema(t), θ, saveat=t);  # (θ, k, ν, Φ)
-tmp = solve(prob, Tsit5())
-U = Array(tmp)
-GraphicTools.show_state(U[:, 1, 1, :], t, x, "", "t", "x")
+  for (i, t) ∈ enumerate(t)
+    pl = plot(; xlabel = "x", title = @sprintf("t = %.3f", t), ylims = extrema(u[:, :]))
+    plot!(pl, x, u[:, i]; label = "Full")
+    plot!(pl, x, U[:, 1, 1, i]; label = "NN")
+    # plot!(pl, x, U[:, 1, 1, i]; label = "POD + NN")
+    plot!(pl, x, Φ * (Φ' * u[:, i]); label = "POD")
+    display(pl)
+end
+# end
 
-prob_neuralode = DiffEqFlux.NeuralODE(K,  extrema(t), Tsit5(), saveat=t);
-u_pred = prob_neuralode(add_dim(u₀))
+# prob_neuralode = DiffEqFlux.NeuralODE(K,  extrema(t), Tsit5(), saveat=t);
+# u_pred = prob_neuralode(add_dim(u₀))
 # GraphicTools.show_state(u, t, x, "", "t", "x")
 # GraphicTools.show_state(hcat(u_pred.u...)[:, :], t, x, "", "t", "x")
 

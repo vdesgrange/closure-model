@@ -123,7 +123,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
 
     @info("Initiate training")
     @info("ADAMW")
-    optf = OptimizationFunction((θ, p, x, y, t) -> loss_derivative_fit(θ, x, y, t), Optimization.AutoZygote());
+    optf = OptimizationFunction((θ, p, x, y, t) -> loss_trajectory_fit(θ, x, y, t), Optimization.AutoZygote());
     optprob = Optimization.OptimizationProblem(optf, p);
     result_neuralode = Optimization.solve(optprob, opt, ncycle(train_loader, epochs), callback=cb)
 

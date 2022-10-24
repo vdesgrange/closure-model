@@ -5,6 +5,7 @@ using JLD2
 using Statistics
 using Random
 
+include("./equations/korteweg_de_vries.jl")
 include("./equations/burgers.jl")
 include("./equations/heat.jl")
 
