@@ -25,6 +25,7 @@ del_dim(x::Array{Float64, 4}) = reshape(x, (size(x)[1], size(x)[3], size(x)[4]))
 del_dim(x::Array{Float64, 3}) = x
 
 function f(u, p, t)
+    Δx = p[1];
     u₋₋ = circshift(u, 2);
     u₋ = circshift(u, 1);
     u₊ = circshift(u, -1);
@@ -40,7 +41,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     ep = 0;
     count = 0;
     lval = 0.;
-    xₙ = kwargs;
+    Δx = kwargs;
 
     @info("Loading dataset")
     (train_loader, val_loader) = ProcessingTools.get_data_loader_cnn(dataset, batch_size, ratio, false, false);
@@ -61,7 +62,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
         sum(eachslice(u; dims = 2)) do y
             y = reshape(y, size(y, 1), 1, :)
             dŷ = f_nn(y, θ, t)
-            dy = f(y, θ, t)
+	    dy = f(y, (Δx), t)
             l = Flux.mse(dŷ, dy)
             l
         end
@@ -103,7 +104,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
 
     @info("Initiate training")
     @info("ADAMW")
-    optf = OptimizationFunction((θ, p, x, y, t) -> loss_derivative_fit(θ, x, y, t), Optimization.AutoZygote());
+    optf = OptimizationFunction((θ, p, x, y, t) -> loss_trajectory_fit(θ, x, y, t), Optimization.AutoZygote());
     optprob = Optimization.OptimizationProblem(optf, p);
     result_neuralode = Optimization.solve(optprob, opt, ncycle(train_loader, epochs), callback=cb)
 
