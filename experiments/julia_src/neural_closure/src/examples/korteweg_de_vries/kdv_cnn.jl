@@ -52,7 +52,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
 
     function predict_neural_ode(θ, x, t)
         _prob = ODEProblem(f_nn, x, extrema(t), θ, saveat=t);
-        ȳ = solve(_prob, sol, u0=x, p=θ, abstol=1e-7, reltol=1e-7, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
+        ȳ = solve(_prob, sol, u0=x, p=θ, dt=0.01, abstol=1e-7, reltol=1e-7, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
         ȳ = Array(ȳ);
         return permutedims(del_dim(ȳ), (1, 3, 2));
     end
@@ -103,7 +103,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
 
     @info("Initiate training")
     @info("ADAMW")
-    optf = OptimizationFunction((θ, p, x, y, t) -> loss_trajectory_fit(θ, x, y, t), Optimization.AutoZygote());
+    optf = OptimizationFunction((θ, p, x, y, t) -> loss_derivative_fit(θ, x, y, t), Optimization.AutoZygote());
     optprob = Optimization.OptimizationProblem(optf, p);
     result_neuralode = Optimization.solve(optprob, opt, ncycle(train_loader, epochs), callback=cb)
 
@@ -112,24 +112,24 @@ end
 
 end
 
-epochs = 2; # Iterations
-ratio = 0.75; # train/val ratio
-lr = 0.003; # learning rate
-reg = 1e-8; # weigh decay (L2 reg)
-noise = 0.; # noise
-batch_size = 16;
-noise = 0.01;
-sol = Tsit5();
+# epochs = 10; # Iterations
+# ratio = 0.75; # train/val ratio
+# lr = 0.003; # learning rate
+# reg = 1e-8; # weigh decay (L2 reg)
+# noise = 0.; # noise
+# batch_size = 16;
+# noise = 0.;
+# sol = Tsit5();
 
-tₙ = 128;
-xₙ = 64;
-snap_kwargs = (; xₙ);
+# tₙ = 128;
+# xₙ = 64;
+# snap_kwargs = (; xₙ);
 
-opt = OptimizationOptimisers.ADAMW(lr, (0.9, 0.999), reg);
-dataset = Generator.read_dataset("./dataset/kdv_high_dim_m25_t0001_128_x1_64.jld2")["training_set"];
-model = Models.CNN3(9, [3, 4, 4, 2, 1]);
-K, p, _ = training(model, epochs, dataset, opt, batch_size, ratio, noise, Tsit5(), snap_kwargs);
-θ = Array(p);
+# opt = OptimizationOptimisers.ADAMW(lr, (0.9, 0.999), reg);
+# dataset = Generator.read_dataset("./dataset/kdv_high_dim_m25_t10_128_x30_64_up8.jld2")["training_set"];
+# model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
+# K, p, _ = training(model, epochs, dataset, opt, batch_size, ratio, noise, Tsit5(), snap_kwargs);
+# θ = Array(p);
 
 # # ===
 # t, u = dataset[1];

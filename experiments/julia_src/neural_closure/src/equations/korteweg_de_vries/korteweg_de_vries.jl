@@ -26,7 +26,8 @@ function get_kdv_fft(t, Δx, xₙ, u₀)
   end
 
   prob = ODEProblem(ODEFunction(f), copy(u₀), extrema(t), (k));
-  sol = solve(prob, Tsit5(), saveat=t, reltol=1e-7, abstol=1e-7);
+  # sol = solve(prob, Tsit5(), saveat=t, reltol=1e-7, abstol=1e-7);
+  sol = solve(prob, Rodas4P(), saveat=t, dt=0.01);
 
   return sol.t, hcat(sol.u...)
 end
@@ -34,7 +35,8 @@ end
 function get_kdv_fd(t, Δx, u₀;)
   """
   Central finite difference method
-  Solve original Korteweg de Vries (KdV) equation with central finite difference method.
+  Solve original Korteweg de Vries (KdV) equation 
+  with central finite difference method using order 2 of accuracy.
   """
 
   function f(u, p, t)
@@ -50,7 +52,8 @@ function get_kdv_fd(t, Δx, u₀;)
   end
   
   prob = ODEProblem(ODEFunction(f), copy(u₀), extrema(t));
-  sol = solve(prob, Tsit5(), saveat=t, reltol=1e-7, abstol=1e-7);
+  # sol = solve(prob, Tsit5(), saveat=t, reltol=1e-7, abstol=1e-7);
+  sol = solve(prob, Tsit5(), saveat=t, dt=0.01);
 
   return sol.t, hcat(sol.u...)
 end

@@ -56,19 +56,18 @@ function high_dim_random_init(t, x, m=28)
   return u0
 end
 
-
 function high_dim_random_init2(t, x, m=28)
   d = Normal(0., 1.)
   nu = rand(d, 2 * m)
+  x = (x .- x[1]) ./ (x[end] .- x[1])
   s = [nu[2 * k] * sin.(k * x) + nu[2 * k - 1] * cos.(k * x) for k in range(1, m, step=1)]
 
   u0 = zeros(Float64, size(t, 1), size(x, 1))
   u0[1, :] .= (1 / sqrt(m)) .* sum(s)
-  # u0[:, 1] .= 0
-  # u0[:, end] .= 0
 
   return u0
 end
+
 
 function analytical_burgers_1d(t, x, nu)
 end
