@@ -24,18 +24,10 @@ include("../../utils/generators.jl")
 del_dim(x::Array{Float64, 4}) = reshape(x, (size(x)[1], size(x)[3], size(x)[4]))
 del_dim(x::Array{Float64, 3}) = x
 
-function f(u, p, t)
-    Δx = p[1];
-    u₋₋ = circshift(u, 2);
-    u₋ = circshift(u, 1);
-    u₊ = circshift(u, -1);
-    u₊₊ = circshift(u, -2);
-  
-    uₓ = (u₊ - u₋) ./ (2 * Δx);
-    uₓₓₓ = (-u₋₋ .+ 2u₋ .- 2u₊ + u₊₊) ./ (2 * Δx^3);
-    uₜ = -(6u .* uₓ) .- uₓₓₓ;
-    return uₜ
-  end
+function mape(ŷ, y)
+    _check_sizes(ŷ, y)
+    100 * mean(abs((y .- ŷ) ./ y))
+end
 
 function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=Tsit5(), kwargs=(;))
     ep = 0;
@@ -51,30 +43,29 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     f_nn =  (u, p, t) -> re(p)(u)
 
     function predict_neural_ode(θ, x, t)
-        @show(size(x))
-        @show(size(t))
         _prob = ODEProblem(f_nn, x, extrema(t), θ, saveat=t);
-        ȳ = solve(_prob, sol, u0=x, p=θ, dt=0.01, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
+        ȳ = solve(_prob, sol, u0=x, p=θ, abstol=1e-7, reltol=1e-7, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
         ȳ = Array(ȳ);
         return permutedims(del_dim(ȳ), (1, 3, 2));
-    end
-
-    function loss_derivative_fit(θ, x, u, t)
-        sum(eachslice(u; dims = 2)) do y
-            y = reshape(y, size(y, 1), 1, :)
-            dŷ = f_nn(y, θ, t)
-	        dy = f(y, (Δx), t)
-            l = Flux.mse(dŷ, dy)
-            l
-        end
-    end
-  
-    function loss_trajectory_fit(θ, x, y, t)
+      end
+    
+      function loss_trajectory_fit(θ, x, y, t)
         x̂ = Reg.gaussian_augment(x, noise);
         ŷ = predict_neural_ode(θ, x̂, t[1]);
         l = Flux.mse(ŷ, y)
+        # l = mape(ŷ, y)
         return l;
-    end
+      end
+
+    # function loss_derivative_fit(θ, x, u, t)
+    #     sum(eachslice(u; dims = 2)) do y
+    #         y = reshape(y, size(y, 1), 1, :)
+    #         dŷ = f_nn(y, θ, t)
+	#         dy = f(y, (Δx), t)
+    #         l = Flux.mse(dŷ, dy)
+    #         l
+    #     end
+    # end
 
     function loss_combined_fit(θ, x, y, t)
         l = 0.1 * loss_derivative_fit(θ, x, y, t) + 10 * loss_trajectory_fit(θ, x, y, t);
@@ -84,7 +75,8 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     function val_loss(θ, x, y, t)
         ŷ = predict_neural_ode(θ, x, t[1]);
         l = Flux.mse(ŷ, y)
-        return l;
+        mape = mape(ŷ, y)
+        return l, mape;
     end
 
 
@@ -97,13 +89,16 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
             ep += 1;
             count = 0;
             lval = 0;
+            lmape = 0;
 
             for (x, y, t) in val_loader
-                lval += val_loss(θ, x, y, t); 
+                lval, lmape += val_loss(θ, x, y, t); 
             end
 
             lval /= (val_loader.nobs / val_loader.batchsize);
-            @info("Epoch ", ep, lval);
+            lmape /= (val_loader.nobs / val_loader.batchsize);
+
+            @info("Epoch ", ep, lval, lmape);
         end
         return false
     end
@@ -132,7 +127,7 @@ lr = 0.003; # learning rate
 reg = 1e-8; # weigh decay (L2 reg)
 noise = 0.01; # noise
 batch_size = 16;
-sol = QNDF();
+sol = Rodas4P();
 tₙ = 128;
 xₙ = 64;
 xₘₐₓ = 8 * pi;

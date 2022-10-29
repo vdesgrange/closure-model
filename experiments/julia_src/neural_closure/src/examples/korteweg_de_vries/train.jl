@@ -14,18 +14,18 @@ function main()
     reg = 1e-8; # weigh decay (L2 reg)
     noise = 0.05; # noise
     batch_size = 16;
-    sol = Tsit5();
+    sol = Rodas4P();
     xₙ = 64;
-    x_max = 30;
-    Δx = x_max ./ xₙ;
-    snap_kwargs = (; xₙ);
+    xₘₐₓ = 8 * pi;
+    Δx = xₘₐₓ / xₙ;
+    snap_kwargs = (; Δx);
 
     opt = OptimizationOptimisers.ADAMW(lr, (0.9, 0.999), reg);
-    dataset = Generator.read_dataset("./dataset/kdv_high_dim_m25_t10_128_x30_64_up8.jld2")["training_set"];
+    dataset = Generator.read_dataset("./dataset/kdv_high_dim_m25_t10_128_x8pi_64_up2.jld2")["training_set"];
     model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
-    K, p, _ = KdVCNN.training(model, epochs, dataset, opt, batch_size, ratio, noise, Tsit5(), snap_kwargs);
+    K, p, _ = KdVCNN.training(model, epochs, dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);
   
-    @save "./models/kdv_high_dim_m25_t10_128_x30_64_up4_traj.bson" K p
+    @save "./models/kdv_high_dim_m25_t10_128_x30_64_up2_traj.bson" K p
   
     return K, p
   end

@@ -11,6 +11,7 @@ using JLD2
 
 include("../../equations/initial_functions.jl")
 include("../../utils/graphic_tools.jl")
+include("../../utils/generators.jl")
 
 function show_state(u, x, y, title, xlabel, ylabel)
   pyplot();
@@ -50,9 +51,9 @@ function random_init(t, x)
 end
 
 
-t_max = 10.;
+t_max = 10;  # 0.0001, 10
 t_min = 0;
-x_max = 8 * pi;
+x_max = 8 * pi; # 1, 8 * pi,
 x_min = 0;
 x_n = 128;
 t_n = 256;
@@ -65,6 +66,7 @@ x = LinRange(x_min, x_max, x_n);
 Δt = (t_max - t_min) / t_n;
 
 function f(u, p, t)
+  Δx = p[1];
   u₋₋ = circshift(u, 2);
   u₋ = circshift(u, 1);
   u₊ = circshift(u, -1);
@@ -118,7 +120,7 @@ function high_dim_random_init2(t, x, m=28)
   d = Normal(0., 1.)
   nu = rand(d, 2 * m)
   x = (x .- x[1]) ./ (x[end] .- x[1])
-  s = [nu[2 * k] * sin.(k * x) + nu[2 * k - 1] * cos.(k * x) for k in range(1, m, step=1)]
+  s = [nu[2 * k] * sin.(2 * pi * k * x) + nu[2 * k - 1] * cos.(2 * pi * k * x) for k in range(1, m, step=1)]
 
   u0 = zeros(Float64, size(t, 1), size(x, 1))
   u0[1, :] .= (1 / sqrt(m)) .* sum(s)
@@ -131,10 +133,11 @@ end
 u0 = random_init(t, x)[1, :];
 u0 = @. exp(-(x - 0.5)^2 / 0.005);
 u0 = @. sinpi(2x) + sinpi(6x) + cospi(10x);
-u0 = high_dim_random_init2(t, x, 25)[1, :];
+u0 = high_dim_random_init2(t, x, 3)[1, :];
 Plots.plot(x, u0; label = "Unfiltered")
 
-prob = ODEProblem(ODEFunction(f), copy(u0), extrema(t), (k));
+
+prob = ODEProblem(ODEFunction(f), copy(u0), extrema(t), (Δx));
 sol = solve(prob, Rodas4P(), saveat=t, dt=0.01);
 t2 = sol.t;
 u = hcat(sol.u...);
@@ -161,31 +164,40 @@ GraphicTools.show_state(u .- Wsol, t, x, "", "t", "x")
 
 # ==== Generate + Fix data sets for KdV
 
-# include("../../utils/generators.jl");
+include("../../utils/generators.jl");
 
-# snap_kwarg=(; t_max=10., t_min=0., x_max=8 * pi, x_min=0., t_n=128, x_n=64, typ=2);
-# init_kwarg = (; mu=25);
-# dataset2 = Generator.generate_kdv_dataset(5, 4, "", snap_kwarg, init_kwarg);
-# dataset = Generator.read_dataset("kdv_high_dim_m25_t10_128_x30_64_up8.jld2")["training_set"];
+snap_kwarg=(; t_max=10, t_min=0., x_max=8*pi, x_min=0., t_n=128, x_n=64, typ=2);
+init_kwarg = (; mu=3);
+# dataset2 = Generator.generate_kdv_dataset(1, 2, "", snap_kwarg, init_kwarg); # kdv_high_dim_m25_t10_128_x8pi_64_up2.jld2
+dataset = Generator.read_dataset("dataset/kdv_high_dim_m25_t10_128_x8pi_64_up2.jld2")["training_set"];
 
-# fix = [];
-# for (i, data) in enumerate(dataset)
-#   print(i)
-#   if (size(data[2]) != (64, 128))
-#     push!(fix, i);
-#     println(i)
-#     println(size(data[2]))
-#   end
-# end
+fix = [];
+for (i, data) in enumerate(dataset)
+  if (size(data[2]) != (64, 128))
+    push!(fix, i);
+    println(i)
+    println(size(data[2]))
+  end
+end
 
-# for (i, j) in enumerate(fix)
-#   println(j)
-#   println(i)
-#   println(size(dataset[j][2]));
-#   dataset[j] = dataset2[i];
-#   println(size(dataset[j][2]));
-# end
+for (i, j) in enumerate(fix)
+  println(j)
+  println(i)
+  println(size(dataset[j][2]));
+  dataset[j] = dataset2[i];
+  println(size(dataset[j][2]));
+end
 
-# JLD2.save("kdv_high_dim_m25_t10_128_x30_64_up8.jld2", "training_set", dataset);
+JLD2.save("dataset/kdv_high_dim_m25_t10_128_x8pi_64_up2.jld2", "training_set", dataset);
+
+dataset = Generator.read_dataset("dataset/kdv_high_dim_m25_t0001_128_x1_64.jld2")["training_set"];
+x = LinRange(x_min, 8*pi, 64);
+t, u, _, _ = dataset[1];
+display(GraphicTools.show_state(u, t, x, "", "t", "x"))
+
+for (i, data) in enumerate(dataset)
+  t, u, _, _ = data;
+  display(GraphicTools.show_state(u, t, x, "", "t", "x"))
+end
 
 # =============
