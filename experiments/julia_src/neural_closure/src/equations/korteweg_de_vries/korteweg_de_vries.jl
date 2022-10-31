@@ -46,14 +46,14 @@ function get_kdv_fd(t, Δx, u₀;)
     u₊₊ = circshift(u, -2);
   
     uₓ = (u₊ - u₋) ./ (2 * Δx);
-    uₓₓₓ = (-u₋₋ .+ 2u₋ .- 2u₊ + u₊₊) ./ (2 * Δx^3);
+    uₓₓₓ = (-u₋₋ .+ 2 .*u₋ .- 2u₊ + u₊₊) ./ (2 * Δx^3);
     uₜ = -(6u .* uₓ) .- uₓₓₓ;
     return uₜ
   end
   
   prob = ODEProblem(ODEFunction(f), copy(u₀), extrema(t));
   # sol = solve(prob, Tsit5(), saveat=t, reltol=1e-7, abstol=1e-7);
-  sol = solve(prob, Tsit5(), saveat=t, dt=0.01);
+  sol = solve(prob, Rodas4P(), saveat=t, dt=0.01);
 
   return sol.t, hcat(sol.u...)
 end

@@ -1,5 +1,3 @@
-module KdVCNN
-
 using FFTW
 using AbstractFFTs
 using Statistics
@@ -35,13 +33,14 @@ function f(u, p, t)
     uₓₓₓ = (-u₋₋ .+ 2u₋ .- 2u₊ + u₊₊) ./ (2 * Δx^3);
     uₜ = -(6u .* uₓ) .- uₓₓₓ;
     return uₜ
-  end
+end
 
 function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=Tsit5(), kwargs=(;))
     ep = 0;
     count = 0;
     lval = 0.;
-    Δx = kwargs;
+    Δx = kwargs.Δx;
+    reg = kwargs.reg;
 
     @info("Loading dataset")
     (train_loader, val_loader) = ProcessingTools.get_data_loader_cnn(dataset, batch_size, ratio, false, false);
@@ -50,25 +49,17 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     p, re = Flux.destructure(model);
     f_nn =  (u, p, t) -> re(p)(u)
 
-    function predict_neural_ode(θ, x, t)
-        @show(size(x))
-        @show(size(t))
-        _prob = ODEProblem(f_nn, x, extrema(t), θ, saveat=t);
-        ȳ = solve(_prob, sol, u0=x, p=θ, dt=0.01, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
-        ȳ = Array(ȳ);
-        return permutedims(del_dim(ȳ), (1, 3, 2));
+    function f_closure(u, p, t)
+        f_ref(u, (Δx), t) + f_nn(u, p, t)
     end
 
-    function loss_derivative_fit(θ, x, u, t)
-        sum(eachslice(u; dims = 2)) do y
-            y = reshape(y, size(y, 1), 1, :)
-            dŷ = f_nn(y, θ, t)
-	        dy = f(y, (Δx), t)
-            l = Flux.mse(dŷ, dy)
-            l
-        end
-    end
-  
+    function predict_neural_ode(θ, x, t)
+        _prob = ODEProblem(f_nn, x, extrema(t), θ, saveat=t);
+        ȳ = solve(_prob, sol, u0=x, p=θ, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));  # BacksolveAdjoint work
+        ȳ = Array(ȳ);
+        return permutedims(del_dim(ȳ), (1, 3, 2));
+      end
+    
     function loss_trajectory_fit(θ, x, y, t)
         x̂ = Reg.gaussian_augment(x, noise);
         ŷ = predict_neural_ode(θ, x̂, t[1]);
@@ -76,17 +67,33 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
         return l;
     end
 
-    function loss_combined_fit(θ, x, y, t)
-        l = 0.1 * loss_derivative_fit(θ, x, y, t) + 10 * loss_trajectory_fit(θ, x, y, t);
-        return l;
+    # function loss_derivative_fit(θ, x, u, t)
+    #     mean(eachslice(u; dims = 2)) do y
+    #         y = reshape(y, size(y, 1), 1, :)
+    #         dŷ = f_nn(y, θ, t)
+    #         dy = f(y, (Δx), t)
+    #         l = Flux.mse(dŷ, dy) + reg * sum(θ)
+    #         l
+    #     end
+    # end
+
+    function loss_derivative_fit(θ, x, u, t)
+        y = reshape(u, size(u, 1), 1, :)
+        dŷ = f_nn(y, θ, t)
+        dy = f(y, (Δx), t)
+        l = Flux.mse(dŷ, dy) + reg * sum(θ)
     end
 
-    function val_loss(θ, x, y, t)
+    function val_loss(θ, x, u, t) # y
         ŷ = predict_neural_ode(θ, x, t[1]);
-        l = Flux.mse(ŷ, y)
-        return l;
-    end
+        lt = Flux.mse(ŷ, u)
 
+        y = reshape(u, size(u, 1), 1, :)
+        dŷ = f_nn(y, θ, t)
+        dy = f(y, (Δx), t)
+        lv = Flux.mse(dŷ, dy)
+        return lv, lt;
+    end
 
     function cb(θ, l)
         @show(l)
@@ -97,68 +104,76 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
             ep += 1;
             count = 0;
             lval = 0;
+            ltraj = 0;
 
             for (x, y, t) in val_loader
-                lval += val_loss(θ, x, y, t); 
+                a, b = val_loss(θ, x, y, t); 
+                lval += a;
+                ltraj += b;
             end
 
             lval /= (val_loader.nobs / val_loader.batchsize);
-            @info("Epoch ", ep, lval);
+            ltraj /= (val_loader.nobs / val_loader.batchsize);
+            # lmape / (val_loader.nobs / val_loader.batchsize);
+
+            @info("Epoch ", ep, lval, ltraj);
         end
         return false
     end
 
     @info("Initiate training")
-    @info("ADAMW Trajectory fit")
-    optf = OptimizationFunction((θ, p, x, y, t) -> loss_trajectory_fit(θ, x, y, t), Optimization.AutoZygote());
+    @info("ADAMW Derivative fit")
+    optf = OptimizationFunction((θ, p, x, y, t) -> loss_derivative_fit(θ, x, y, t), Optimization.AutoZygote());
     optprob = Optimization.OptimizationProblem(optf, p);
     result_neuralode = Optimization.solve(optprob, opt, ncycle(train_loader, epochs), callback=cb)
 
-    # @info("ADAMW Trajectory 2 fit")
+    # @info("Initiate training")
+    # @info("ADAMW Trajectory fit")
     # optf2 = OptimizationFunction((θ, p, x, y, t) -> loss_trajectory_fit(θ, x, y, t), Optimization.AutoZygote());
-    # optprob2 = remake(optprob, f=optf2, u0 = result_neuralode.u);
-    # result_neuralode2 = Optimization.solve(optprob2, opt, ncycle(train_loader, epochs), callback=cb, allow_f_increases = false);
+    # optprob2 = remake(optprob, f=optf2, u0 = result_neuralode.u)
+    # result_neuralode2 = Optimization.solve(optprob2, opt,
+    #                                         ncycle(train_loader, epochs),
+    #                                         callback=cb,
+    #                                         allow_f_increases = false)
 
     return re(result_neuralode.u), result_neuralode.u, lval
 end
 
-end
+using BSON: @save
+using Flux
+using OrdinaryDiffEq: Tsit5
+using OptimizationOptimisers
 
-include("../../utils/graphic_tools.jl")
+include("../../neural_ode/models.jl");
+include("../../utils/generators.jl");
 
-epochs = 10; # Iterations
+epochs = 100; # Iterations
 ratio = 0.75; # train/val ratio
 lr = 0.003; # learning rate
 reg = 1e-8; # weigh decay (L2 reg)
 noise = 0.01; # noise
-batch_size = 16;
-sol = QNDF();
+batch_size = 8;
+sol = Tsit5();
 tₙ = 128;
 xₙ = 64;
 xₘₐₓ = 8 * pi;
 Δx = xₘₐₓ / xₙ;
-snap_kwargs = (; Δx);
+snap_kwargs = (; Δx, reg);
 
-opt = OptimizationOptimisers.ADAMW(lr, (0.9, 0.999), reg);
-dataset = Generator.read_dataset("./dataset/kdv_high_dim_m25_t10_128_x8pi_64_up2.jld2")["training_set"]; # kdv_high_dim_m25_t10_128_x30_64_up8.jld2
+opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999)); 
+dataset = Generator.read_dataset("./dataset/kdv_high_dim_m25_t3_128_x8pi_64_up2.jld2")["training_set"];
 model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
-# model = Models.FeedForwardNetwork(xₙ, 2, 64);
-K, p, _ = KdVCNN.training(model, epochs, dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);
-θ = Array(p);
+K, p, _ = training(model, epochs, dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);
 
 # # ===
-# t, u = dataset[1];
-# u₀ = reshape(u[:, 1], :, 1, 1);
+include("../../utils/graphic_tools.jl")
+t, u = dataset[1];
+u₀ = reshape(u[:, 1], :, 1, 1);
+x = LinRange(0, xₘₐₓ, xₙ);
+prob = ODEProblem((u, p, t) -> K(u), u₀, extrema(t), Array(p), saveat=t);
+U = Array(solve(prob, Tsit5()));
+GraphicTools.show_state(U[:, 1, 1, :], t, x, "", "t", "x")
 
-# t, u₀, u = Generator.get_dv_batch(t_max, t_min, x_max, x_min, tₙ, xₙ, 2, init_kwargs);
-# u₀ = reshape(u[:, 1], :, 1, 1);
-# f_nn =  (u, p, t) -> K(u);
-
-# prob = ODEProblem(f_nn, u₀, extrema(t), θ, saveat=t);
-# U = Array(solve(prob, Tsit5()));
-
+# t, u₀, u = Generator.get_kdv_batch(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, 2, init_kwargs);
 # prob_closure = ODEProblem(f_closure, u₀, extrema(t), θ, saveat=t);
 # U_closure = Array(solve(prob_closure, Tsit5()))
-
-# GraphicTools.show_state(u, t, x, "", "t", "x")
-

@@ -60,7 +60,7 @@ function high_dim_random_init2(t, x, m=28)
   d = Normal(0., 1.)
   nu = rand(d, 2 * m)
   x = (x .- x[1]) ./ (x[end] .- x[1])
-  s = [nu[2 * k] * sin.(k * x) + nu[2 * k - 1] * cos.(k * x) for k in range(1, m, step=1)]
+  s = [nu[2 * k] * sin.(2 * pi * k * x) + nu[2 * k - 1] * cos.(2 * pi * k * x) for k in range(1, m, step=1)]
 
   u0 = zeros(Float64, size(t, 1), size(x, 1))
   u0[1, :] .= (1 / sqrt(m)) .* sum(s)

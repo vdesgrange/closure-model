@@ -50,9 +50,9 @@ function random_init(t, x)
 end
 
 
-t_max = 10.;
+t_max = 0.5; # 10
 t_min = 0;
-x_max = 8 * pi;
+x_max = 1.; # 8 * pi
 x_min = 0;
 x_n = 128;
 t_n = 256;
@@ -114,24 +114,10 @@ W = W ./ sum(W; dims = 2);
 
 k = 2 * pi * AbstractFFTs.fftfreq(x_n, 1. / Δx) # Sampling rate, inverse of sample spacing
 
-function high_dim_random_init2(t, x, m=28)
-  d = Normal(0., 1.)
-  nu = rand(d, 2 * m)
-  x = (x .- x[1]) ./ (x[end] .- x[1])
-  s = [nu[2 * k] * sin.(k * x) + nu[2 * k - 1] * cos.(k * x) for k in range(1, m, step=1)]
-
-  u0 = zeros(Float64, size(t, 1), size(x, 1))
-  u0[1, :] .= (1 / sqrt(m)) .* sum(s)
-  # u0[:, 1] .= 0
-  # u0[:, end] .= 0
-
-  return u0
-end
-
 u0 = random_init(t, x)[1, :];
 u0 = @. exp(-(x - 0.5)^2 / 0.005);
 u0 = @. sinpi(2x) + sinpi(6x) + cospi(10x);
-u0 = high_dim_random_init2(t, x, 25)[1, :];
+u0 = InitialFunctions.high_dim_random_init2(t, x, 3)[1, :];
 Plots.plot(x, u0; label = "Unfiltered")
 
 prob = ODEProblem(ODEFunction(f), copy(u0), extrema(t), (k));
@@ -161,12 +147,15 @@ GraphicTools.show_state(u .- Wsol, t, x, "", "t", "x")
 
 # ==== Generate + Fix data sets for KdV
 
-# include("../../utils/generators.jl");
-
-# snap_kwarg=(; t_max=10., t_min=0., x_max=8 * pi, x_min=0., t_n=128, x_n=64, typ=2);
-# init_kwarg = (; mu=25);
-# dataset2 = Generator.generate_kdv_dataset(5, 4, "", snap_kwarg, init_kwarg);
+include("../../utils/generators.jl");
+# kdv_high_dim_mu3_t10_128_x8pi_64_typ2_up1.jld2
+snap_kwarg =(; t_max=10, t_min=0., x_max=8 * pi, x_min=0., t_n=128, x_n=64, typ=2);
+init_kwarg = (; mu=3);
+dataset2 = Generator.generate_kdv_dataset(256, 2, "", snap_kwarg, init_kwarg);
 # dataset = Generator.read_dataset("kdv_high_dim_m25_t10_128_x30_64_up8.jld2")["training_set"];
+t, u , _ , _ = dataset2[1]
+GraphicTools.show_state(u, t, x, "", "", "")
+Plots.plot(x, u[:, 1]; label = "Unfiltered")
 
 # fix = [];
 # for (i, data) in enumerate(dataset)
