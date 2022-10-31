@@ -54,6 +54,5 @@ function get_kdv_fd(t, Δx, u₀;)
   prob = ODEProblem(ODEFunction(f), copy(u₀), extrema(t));
   # sol = solve(prob, Tsit5(), saveat=t, reltol=1e-7, abstol=1e-7);
   sol = solve(prob, Rodas4P(), saveat=t, dt=0.01);
-
   return sol.t, hcat(sol.u...)
 end

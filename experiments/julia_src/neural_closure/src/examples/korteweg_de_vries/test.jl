@@ -149,16 +149,13 @@ GraphicTools.show_state(u .- Wsol, t, x, "", "t", "x")
 
 include("../../utils/generators.jl");
 # kdv_high_dim_mu3_t10_128_x8pi_64_typ2_up1.jld2
-snap_kwarg =(; t_max=10, t_min=0., x_max=8 * pi, x_min=0., t_n=128, x_n=64, typ=2);
+snap_kwarg =(; t_max=3, t_min=0., x_max=8 * pi, x_min=0., t_n=128, x_n=64, typ=2);
 init_kwarg = (; mu=3);
-dataset2 = Generator.generate_kdv_dataset(256, 2, "", snap_kwarg, init_kwarg);
+dataset2 = Generator.generate_kdv_dataset(14, 2, "", snap_kwarg, init_kwarg);
 # dataset = Generator.read_dataset("kdv_high_dim_m25_t10_128_x30_64_up8.jld2")["training_set"];
-t, u , _ , _ = dataset2[1]
-GraphicTools.show_state(u, t, x, "", "", "")
-Plots.plot(x, u[:, 1]; label = "Unfiltered")
 
 # fix = [];
-# for (i, data) in enumerate(dataset)
+# for (i, data) in enumerate(dataset2)
 #   print(i)
 #   if (size(data[2]) != (64, 128))
 #     push!(fix, i);
@@ -166,15 +163,15 @@ Plots.plot(x, u[:, 1]; label = "Unfiltered")
 #     println(size(data[2]))
 #   end
 # end
-
+# size(fix)
 # for (i, j) in enumerate(fix)
 #   println(j)
 #   println(i)
-#   println(size(dataset[j][2]));
-#   dataset[j] = dataset2[i];
-#   println(size(dataset[j][2]));
+#   println(size(dataset2[j][2]));
+#   dataset2[j] = dataset3[i];
+#   println(size(dataset2[j][2]));
 # end
 
-# JLD2.save("kdv_high_dim_m25_t10_128_x30_64_up8.jld2", "training_set", dataset);
+# JLD2.save("kdv_high_dim_m25_t3_128_x8pi_64_up2.jld2", "training_set", dataset2);
 
 # =============

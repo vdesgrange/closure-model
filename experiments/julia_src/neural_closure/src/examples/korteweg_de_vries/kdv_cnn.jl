@@ -64,8 +64,19 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
         x̂ = Reg.gaussian_augment(x, noise);
         ŷ = predict_neural_ode(θ, x̂, t[1]);
         l = Flux.mse(ŷ, y)
+        # l = mape(ŷ, y)
         return l;
-    end
+      end
+
+    # function loss_derivative_fit(θ, x, u, t)
+    #     sum(eachslice(u; dims = 2)) do y
+    #         y = reshape(y, size(y, 1), 1, :)
+    #         dŷ = f_nn(y, θ, t)
+	#         dy = f(y, (Δx), t)
+    #         l = Flux.mse(dŷ, dy)
+    #         l
+    #     end
+    # end
 
     # function loss_derivative_fit(θ, x, u, t)
     #     mean(eachslice(u; dims = 2)) do y
@@ -117,6 +128,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
             # lmape / (val_loader.nobs / val_loader.batchsize);
 
             @info("Epoch ", ep, lval, ltraj);
+
         end
         return false
     end
