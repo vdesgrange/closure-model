@@ -18,16 +18,21 @@ perm_dim(x::Vector{Any}, x_n::Int64, t_n::Int64) = permutedims(reshape(hcat(x...
 Downsample by d a matrix u. Compute average over cell of dimension d.
 """
 function downsampling(u, d)
-  n, m = floor.(Int, size(u) ./ d)
-  d_u = zeros(n, m)
+  (Nₓ, Nₜ) = size(u);
+  Dₜ = Int64(Nₜ / d);
+  u₁ = u[:, 1:d:end]; # Take t value every d steps
+  Dₓ = Int64(Nₓ / d);
+  u₂ = sum(reshape(u₁, d, Dₓ, Dₜ), dims=1);
+  u₃   = reshape(u₂, Dₓ, Dₜ) ./ d;
+  return u₃
+end
 
-  for i in range(0, n - 1, step=1)
-    for j in range(0, m - 1, step=1)
-      d_u[i+1, j+1] = mean(u[i*d + 1:(i + 1)*d, j*d + 1:(j + 1)*d])
-    end
-  end
-
-  return d_u
+function downsampling_x(u, d)
+  (Nₓ, Nₜ) = size(u);
+  Dₓ = Int64(Nₓ / d);
+  u₂ = sum(reshape(u, d, Dₓ, Nₜ), dims=1);
+  u₃   = reshape(u₂, Dₓ, Nₜ) ./ d;
+  return u₃
 end
 
 """

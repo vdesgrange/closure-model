@@ -32,7 +32,7 @@ function get_kdv_fft(t, Δx, xₙ, u₀)
   return sol.t, hcat(sol.u...)
 end
 
-function get_kdv_fd(t, Δx, u₀;)
+function get_kdv_fd(t, Δx, u₀)
   """
   Central finite difference method
   Solve original Korteweg de Vries (KdV) equation 

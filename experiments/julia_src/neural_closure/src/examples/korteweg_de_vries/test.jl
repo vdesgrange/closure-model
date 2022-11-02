@@ -50,9 +50,9 @@ function random_init(t, x)
 end
 
 
-t_max = 0.5; # 10
+t_max = 1.; # 10
 t_min = 0;
-x_max = 1.; # 8 * pi
+x_max = pi; # 8 * pi
 x_min = 0;
 x_n = 128;
 t_n = 256;
@@ -149,10 +149,13 @@ GraphicTools.show_state(u .- Wsol, t, x, "", "t", "x")
 
 include("../../utils/generators.jl");
 # kdv_high_dim_mu3_t10_128_x8pi_64_typ2_up1.jld2
-snap_kwarg =(; t_max=3, t_min=0., x_max=8 * pi, x_min=0., t_n=128, x_n=64, typ=2);
+snap_kwarg =(; t_max=5., t_min=0., x_max=4*pi, x_min=0., t_n=128, x_n=64, typ=2);
 init_kwarg = (; mu=3);
-dataset2 = Generator.generate_kdv_dataset(14, 2, "", snap_kwarg, init_kwarg);
-# dataset = Generator.read_dataset("kdv_high_dim_m25_t10_128_x30_64_up8.jld2")["training_set"];
+# dataset = Generator.generate_kdv_dataset(128, 2, "", snap_kwarg, init_kwarg);
+# dataset = Generator.read_dataset("dataset/kdv_high_dim_m25_t10_128_x8pi_64_up2.jld2")["training_set"];
+t, u , _, _ = dataset[128];
+x = LinRange(0, 4*pi, 64);
+GraphicTools.show_state(u, t, x, "", "t", "x")
 
 # fix = [];
 # for (i, data) in enumerate(dataset2)
@@ -172,6 +175,6 @@ dataset2 = Generator.generate_kdv_dataset(14, 2, "", snap_kwarg, init_kwarg);
 #   println(size(dataset2[j][2]));
 # end
 
-# JLD2.save("kdv_high_dim_m25_t3_128_x8pi_64_up2.jld2", "training_set", dataset2);
+JLD2.save("kdv_high_dim_n128_m3_t5_128_x4pi_64_up2.jld2", "training_set", dataset);
 
-# =============
+# ============
