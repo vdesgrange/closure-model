@@ -93,29 +93,30 @@ function advecting_shock(t, x, nu)
   return u0
 end
 
-function analytical_heat_1d(t, x, n=[], c=[], ka=1.)
-  L = 1.
-  x_min = x[1]
-  N = size(n, 1)
+function analytical_heat_1d(t, x, n=[], c=[], κ=1.)
+  xₘᵢₙ, xₘₐₓ = x[1], x[end];
+  L = xₘₐₓ - xₘᵢₙ;
+  N = size(n)[1];
+  k = 1:N;
 
   if (size(c, 1) == 0)
-    c = randn(N) ./ n # n = range(1, n_max, step=1), 1 to avoid division by 0
+    c = Array(randn(N) ./ k);  # n = range(1, n_max, step=1), 1 to avoid division by 0
   end
 
-  X(n, x) = sqrt(2 / L) * sin(pi * n * (x - x_min) / L);
-  u(x, t) = sum(c * exp(-ka * (pi * n / L)^2 * t) * X(n, x) for (c, n) in zip(c, n))
-  return [u(a, b) for a in x, b in t];
+  aₖ(k, x) = sqrt(2 / L) * sin(π * k * (x - xₘᵢₙ) / L);
+  u(t, x) = sum(cₖ * exp(- κ * π^2 * k^2 / L * t) * aₖ(k, x) for (cₖ, k) in zip(c, k))
+  return Array([u(a, b) for a in t, b in x]) 
 end
 
 
-function heat_analytical_init(t, x, n=[], c=[], ka=1.)
-  u0 = zeros(Float64, size(t, 1), size(x, 1))
-  u = analytical_heat_1d([t[1]], x, n, c, ka)
-  u0[1, :] = copy(u[:, 1])
-  u0[:, 1] .= 0
-  u0[:, end] .= 0
+function heat_analytical_init(t, x, n=[], c=[], κ=1.)
+  u₀ = zeros(Float64, size(t, 1), size(x, 1))
+  u = analytical_heat_1d([t[1]], x, n, c, κ)
+  u₀[1, :] = copy(u[1, :])
+  u₀[:, 1] .= 0
+  u₀[:, end] .= 0
 
-  return u0
+  return u₀
 end
 
 end

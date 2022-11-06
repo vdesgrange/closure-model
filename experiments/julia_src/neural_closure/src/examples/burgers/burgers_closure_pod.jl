@@ -1,4 +1,5 @@
-module BurgersClosure
+# module BurgersClosurePOD
+
 using FFTW
 using AbstractFFTs
 using Statistics
@@ -18,16 +19,15 @@ include("../../utils/processing_tools.jl")
 include("../../neural_ode/regularization.jl")
 include("../../rom/pod.jl")
 include("../../utils/generators.jl")
-include("../..//utils/graphic_tools.jl")
 
 # =======
 
 del_dim(x::Array{Float64, 4}) = reshape(x, (size(x)[1], size(x)[3], size(x)[4]))
 del_dim(x::Array{Float64, 3}) = x
 
-function f2(u, p, t)
+function f(u, p, t)
   ν = p[1]
-  Δx = pi / size(u, 1) # TO UPDATE
+  Δx = p[2]
   u₋ = circshift(u, 1)
   u₊ = circshift(u, -1)
   a₊ = u₊ + u
@@ -40,7 +40,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     ep = 0;
     count = 0;
     lval = 0.;
-    xₙ, ν = kwargs;
+    xₙ, ν, Δx, reg = kwargs;
 
     @info("Loading dataset")
     (train_loader, val_loader) = ProcessingTools.get_data_loader_cnn(dataset, batch_size, ratio, false, false);
@@ -51,13 +51,13 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     end
     u_ref = cat(tmp...; dims=3);
     bas, _ = POD.generate_pod_svd_basis(reshape(Array(u_ref), xₙ, :), false);
-    Φ = bas.modes[:, 1:20];
+    Φ = bas.modes[:, 1:3];
 
     @info("Building model")
     p, re = Flux.destructure(model);
 
     f_ref =  (u, p, t) -> begin
-        y = f2(u, (ν), t)
+        y = f(u, (ν, Δx), t)
         y = reshape(y, size(y, 1), size(y, 3))
         y = Φ * (Φ' * y)
         y = reshape(y, size(y, 1), 1, size(y, 2))
@@ -67,24 +67,31 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     f_nn =  (u, p, t) -> re(p)(u)
 
     function f_closure(u, p, t)
-        f_ref(u, (ν), t) + f_nn(u, p, t)
+        f_ref(u, (ν, Δx), t) + f_nn(u, p, t)
     end
 
     function predict_neural_ode(θ, x, t)
         _prob = ODEProblem(f_closure, x, extrema(t), θ, saveat=t);
-        ȳ = solve(_prob, sol, u0=x, p=θ, abstol=1e-7, reltol=1e-7, sensealg=DiffEqSensitivity.BacksolveAdjoint(; autojacvec=ZygoteVJP()));
+        ȳ = solve(_prob, sol, u0=x, p=θ, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())); # , abstol=1e-7, reltol=1e-7
         ȳ = Array(ȳ);
         return permutedims(del_dim(ȳ), (1, 3, 2));
     end
 
+    # function loss_derivative_fit(θ, x, u, t)
+    #     sum(eachslice(u; dims = 2)) do y
+    #         y = reshape(y, size(y, 1), 1, :)
+    #         dŷ = f_nn(y, θ, t)
+    #         dy = f(y, (ν, Δx), t)
+    #         l = Flux.mse(dŷ, dy)
+    #         l
+    #     end
+    # end
+
     function loss_derivative_fit(θ, x, u, t)
-        sum(eachslice(u; dims = 2)) do y
-            y = reshape(y, size(y, 1), 1, :)
-            dŷ = f_nn(y, θ, t)
-            dy = f2(y, (ν), t)
-            l = Flux.mse(dŷ, dy)
-            l
-        end
+        y = reshape(u, size(u, 1), 1, :)
+        dŷ = f_nn(y, θ, t)
+        dy = f(y, (ν, Δx), t)
+        l = Flux.mse(dŷ, dy) + reg * sum(θ)
     end
   
     function loss_trajectory_fit(θ, x, y, t)
@@ -94,12 +101,16 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
         return l;
     end
 
-    function val_loss(θ, x, y, t)
+    function val_loss(θ, x, u, t) # y
         ŷ = predict_neural_ode(θ, x, t[1]);
-        l = Flux.mse(ŷ, y)
-        return l;
-    end
+        lt = Flux.mse(ŷ, u)
 
+        y = reshape(u, size(u, 1), 1, :)
+        dŷ = f_nn(y, θ, t)
+        dy = f(y, (ν, Δx), t)
+        lv = Flux.mse(dŷ, dy)
+        return lv, lt;
+    end
 
     function cb(θ, l)
         @show(l)
@@ -110,48 +121,59 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
             ep += 1;
             count = 0;
             lval = 0;
+            ltraj = 0;
 
             for (x, y, t) in val_loader
-                lval += val_loss(θ, x, y, t); 
+                a, b = val_loss(θ, x, y, t); 
+                lval += a;
+                ltraj += b;
             end
 
             lval /= (val_loader.nobs / val_loader.batchsize);
-            @info("Epoch ", ep, lval);
+            ltraj /= (val_loader.nobs / val_loader.batchsize);
+
+            @info("Epoch ", ep, lval, ltraj);
         end
         return false
     end
 
     @info("Initiate training")
-    @info("ADAMW")
-    optf = OptimizationFunction((θ, p, x, y, t) -> loss_trajectory_fit(θ, x, y, t), Optimization.AutoZygote());
+    @info("ADAM Trajectory fit")
+    optf = OptimizationFunction((θ, p, x, y, t) -> loss_derivative_fit(θ, x, y, t), Optimization.AutoZygote());
     optprob = Optimization.OptimizationProblem(optf, p);
     result_neuralode = Optimization.solve(optprob, opt, ncycle(train_loader, epochs), callback=cb)
 
     return re(result_neuralode.u), result_neuralode.u, Φ, lval
 end
 
-end
+# end
 
-# epochs = 2; # Iterations
-# ratio = 0.75; # train/val ratio
-# lr = 0.003; # learning rate
-# reg = 1e-7; # weigh decay (L2 reg)
-# noise = 0.; # noise
-# batch_size = 16;
-# noise = 0.;
-# sol = Tsit5();
+#include("../../utils/graphic_tools.jl")
 
-# ν = 0.;
-# t_max = 2.;
-# t_min = 0.;
-# x_max = pi;
-# x_min = 0.;
-# tₙ = 64;
-# xₙ = 64;
-# t =  LinRange(t_min, t_max, tₙ);
-# x =  LinRange(x_min, x_max, xₙ);
-# snap_kwargs = (; xₙ, ν);
-# init_kwargs = (; m=10);
+epochs = 100; # Iterations
+ratio = 0.75; # train/val ratio
+lr = 0.003; # learning rate
+reg = 1e-7; # weigh decay (L2 reg)
+noise = 0.05; # noise
+batch_size = 8;
+sol = Tsit5();
+tₙ = 64;
+xₙ = 64;
+tₘₐₓ= 2.;
+tₘᵢₙ = 0.;
+xₘₐₓ = pi;
+xₘᵢₙ = 0;
+Δx = xₘₐₓ / xₙ;
+ν = 0.;
+snap_kwargs = (; xₙ, ν, Δx, reg);
+init_kwargs = (; m=10);
+x =  LinRange(xₘᵢₙ, xₘₐₓ, xₙ);
+
+opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999)); 
+dataset = Generator.read_dataset("./dataset/inviscid_burgers_high_dim_m10_256_j173.jld2")["training_set"];
+model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
+K, p, Φ, _ = training(model, epochs, dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);
+θ = Array(p);
 
 # opt = OptimizationOptimisers.ADAMW(lr, (0.9, 0.999), reg);
 # dataset = Generator.read_dataset("./dataset/inviscid_burgers_high_dim_m10_256_j173.jld2")["training_set"];

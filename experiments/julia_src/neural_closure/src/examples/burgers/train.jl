@@ -7,7 +7,7 @@ include("../../neural_ode/models.jl");
 include("../../utils/generators.jl");
 include("./burgers_cnn.jl");
 include("./burgers_combined_optimizer.jl");
-include("./burgers_closure_2.jl");
+include("./burgers_closure_pod.jl");
 
 
 """
