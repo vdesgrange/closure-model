@@ -1,12 +1,5 @@
 # module HeatTraining
 
-# using Flux
-# using DiffEqFlux
-# using OrdinaryDiffEq
-# using DifferentialEquations
-# using Plots
-# using GalacticOptim
-
 using Zygote
 using Flux
 using DiffEqFlux
@@ -15,11 +8,10 @@ using DiffEqSensitivity
 using Optimization
 using OptimizationOptimisers
 using IterTools: ncycle
-using BSON: @save
+using BSON: @save, @load
 
-include("../../utils/graphic_tools.jl")
+
 include("../../neural_ode/objectives.jl")
-
 include("../../neural_ode/models.jl")
 include("../../utils/processing_tools.jl")
 include("../../neural_ode/regularization.jl")
@@ -135,9 +127,11 @@ using BSON: @save
 using Flux
 using OrdinaryDiffEq: Tsit5
 using OptimizationOptimisers
+using Plots
 
 include("../../neural_ode/models.jl");
 include("../../utils/generators.jl");
+include("../../utils/graphic_tools.jl")
 
 epochs = 500; # Iterations
 ratio = 0.75; # train/val ratio
@@ -163,47 +157,5 @@ end
 model = Models.LinearModel(xₙ);
 K, p, _ = training(model, epochs, cleaned_dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);
  
-@save "./models/diffusion_k0.01_N15_analytical_t1_64_x1_64_ep500_traj.bson" K p
-  
+# @save "./models/diffusion_k0.01_N15_analytical_t1_64_x1_64_ep500_traj.bson" K p
 
-function check_result(K, θ)
-    t, u₀, ū = Generator.get_heat_batch(1., 0., 1., 0., 64, 64, 3, (;κ = 0.01, N=15));
-    _prob = ODEProblem((u, p, t) -> K(u), x, extrema(t), p, saveat=t);
-    ȳ = solve(_prob, sol, u0=u₀, p=θ, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));  # BacksolveAdjoint work
-    ȳ = Array(ȳ);
-
-    Plots.plot(
-        GraphicTools.show_state(ū, t, x, "", "t", "x"),
-        GraphicTools.show_state(Array(ȳ), t, x, "", "t", "x"),
-        GraphicTools.show_err(Array(ȳ), ū, t, x, "", "t", "x");
-        layout = (1, 3),
-    )
-    # savefig("heat_direct_results.png");
-end
-
-check_result(K, p)
-# end
-
-t, u₀, ū = Generator.get_heat_batch(1., 0., 1., 0., 64, 64, 3, (;κ = 0.01, N=15));
-_prob = ODEProblem((u, p, t) -> K(u), x, extrema(t), p, saveat=t);
-ȳ = solve(_prob, sol, u0=u₀, p=p, dt=0.001, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
-ȳ = Array(ȳ);
-
-plt = GraphicTools.show_state(ū, t, x, "", "t", "x");
-Plots.savefig("diffusion_reference_k0.01_N15_t1_x1.png");
-
-plt = GraphicTools.show_state(Array(ȳ), t, x, "", "t", "x")
-Plots.savefig(plt, "diffusion_prediction_k0.01_N15_t1_x1.png");
-
-plt = GraphicTools.show_err(Array(ȳ), ū, t, x, "", "t", "x")
-Plots.savefig(plt, "diffusion_difference_k0.01_N15_t1_x1.png");
-
-plt = heatmap(reshape(p, (64, 64)));
-heatmap!(plt,
-    dpi=600,
-    aspect_ratio = :equal,
-    reuse=false,
-    c=:dense,
-    yflip=true
-)
-Plots.savefig(plt, "diffusion_learned_operator.png");

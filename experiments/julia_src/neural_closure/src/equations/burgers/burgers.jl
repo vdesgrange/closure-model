@@ -6,6 +6,18 @@ using Statistics
 using Zygote
 
 
+  # function f(u, p, t)
+  #   ν = p[1]
+  #   Δx = p[2]
+  #   u₋ = circshift(u, 1)
+  #   u₊ = circshift(u, -1)
+  #   a₊ = u₊ + u
+  #   a₋ = u + u₋
+  #   du = @. -((a₊ < 0) * u₊^2 + (a₊ > 0) * u^2 - (a₋ < 0) * u^2 - (a₋ > 0) * u₋^2) / Δx + ν * (u₋ - 2u + u₊) / Δx^2
+  #   du
+  # end
+
+  
 function get_burgers_fft(t, Δx, xₙ, ν, u₀)
   """
   Pseudo-spectral method
@@ -16,8 +28,6 @@ function get_burgers_fft(t, Δx, xₙ, ν, u₀)
   function f(u, p, t)
     k = p[1]
     ν = p[2]
-    # u[1] = 0.
-    # u[end] = 0.
 
     û = FFTW.fft(u)
     ûₓ = 1im .* k .* û
@@ -29,13 +39,11 @@ function get_burgers_fft(t, Δx, xₙ, ν, u₀)
     return real.(uₜ)
   end
 
-  tspan = (t[1], t[end])
-  prob = ODEProblem(ODEFunction(f), copy(u₀), tspan, (k, ν))
-  sol = solve(prob, Tsit5(), saveat=t, reltol=1e-8, abstol=1e-8) 
+  prob = ODEProblem(ODEFunction(f), copy(u₀), extrema(t), (k, ν))
+  sol = solve(prob, Rodas4P(), saveat=t, reltol=1e-6, abstol=1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())) 
 
   return sol.t, hcat(sol.u...)
 end
-
 
 function get_burgers_ccdf(t, Δx, xₙ, ν, u₀)
   """

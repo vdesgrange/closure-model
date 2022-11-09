@@ -53,6 +53,20 @@ initial conditions - high_dim
 m = 10
 ```
 
+Viscous burgers dataset using high dim gaussian conditions (multiple waves)
+```
+viscous_burgers_high_dim_m10_256_j173.jld2
+Julia 1.7.3
+256
+t in [0., 2.]
+x in [0., pi]
+t_n, x_n = 64, 64
+nu = 0.04
+initial conditions - high_dim 
+m = 5
+upscale = 16
+```
+
 Inviscid burgers dataset using advecting shock initial condition (analytical solution from paper Malik 2020).
 ```
 inviscid_burgers_advecting_shock_nu0001_t2_4_j173.jld2

@@ -81,7 +81,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     function loss_trajectory_fit(θ, x, y, t)
         x̂ = Reg.gaussian_augment(x, noise);
         ŷ = predict_neural_ode(θ, x̂, t[1]);
-        l = Flux.mse(ŷ, y)
+        l = Flux.mse(ŷ, y)  + reg * sum(θ);
         return l;
     end
 
