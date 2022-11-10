@@ -58,7 +58,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
         ȳ = solve(_prob, sol, u0=x, p=θ, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));  # BacksolveAdjoint work
         ȳ = Array(ȳ);
         return permutedims(del_dim(ȳ), (1, 3, 2));
-      end
+    end
     
 
     # function loss_derivative_fit(θ, x, u, t)
