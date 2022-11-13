@@ -6,18 +6,6 @@ using Statistics
 using Zygote
 
 
-  # function f(u, p, t)
-  #   ν = p[1]
-  #   Δx = p[2]
-  #   u₋ = circshift(u, 1)
-  #   u₊ = circshift(u, -1)
-  #   a₊ = u₊ + u
-  #   a₋ = u + u₋
-  #   du = @. -((a₊ < 0) * u₊^2 + (a₊ > 0) * u^2 - (a₋ < 0) * u^2 - (a₋ > 0) * u₋^2) / Δx + ν * (u₋ - 2u + u₊) / Δx^2
-  #   du
-  # end
-
-  
 function get_burgers_fft(t, Δx, xₙ, ν, u₀)
   """
   Pseudo-spectral method
@@ -25,21 +13,32 @@ function get_burgers_fft(t, Δx, xₙ, ν, u₀)
   """
   k = 2 * pi * AbstractFFTs.fftfreq(xₙ, 1. / Δx) # Sampling rate, inverse of sample spacing
 
+  # function f(u, p, t)
+  #   k = p[1]
+  #   ν = p[2]
+
+  #   û = FFTW.fft(u)
+  #   ûₓ = 1im .* k .* û
+  #   ûₓₓ = (-k.^2) .* û
+
+  #   uₓ = FFTW.ifft(ûₓ)
+  #   uₓₓ = FFTW.ifft(ûₓₓ)
+  #   uₜ = -u .* uₓ + ν .* uₓₓ
+  #   return real.(uₜ)
+  # end
+
   function f(u, p, t)
-    k = p[1]
-    ν = p[2]
-
-    û = FFTW.fft(u)
-    ûₓ = 1im .* k .* û
-    ûₓₓ = (-k.^2) .* û
-
-    uₓ = FFTW.ifft(ûₓ)
-    uₓₓ = FFTW.ifft(ûₓₓ)
-    uₜ = -u .* uₓ + ν .* uₓₓ
-    return real.(uₜ)
+    ν = p[1]
+    Δx = p[2]
+    u₋ = circshift(u, 1)
+    u₊ = circshift(u, -1)
+    a₊ = u₊ + u
+    a₋ = u + u₋
+    du = @. -((a₊ < 0) * u₊^2 + (a₊ > 0) * u^2 - (a₋ < 0) * u^2 - (a₋ > 0) * u₋^2) / Δx + ν * (u₋ - 2u + u₊) / Δx^2
+    du
   end
 
-  prob = ODEProblem(ODEFunction(f), copy(u₀), extrema(t), (k, ν))
+  prob = ODEProblem(ODEFunction(f), copy(u₀), extrema(t), (ν, Δx))
   sol = solve(prob, Rodas4P(), saveat=t, reltol=1e-6, abstol=1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())) 
 
   return sol.t, hcat(sol.u...)

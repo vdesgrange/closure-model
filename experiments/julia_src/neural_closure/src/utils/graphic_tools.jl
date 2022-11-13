@@ -52,6 +52,7 @@ function show_state(u, x, y, title, xlabel, ylabel)
         aspect_ratio = :equal,
         reuse=false,
         c=:dense,
+        grid=:none,
         xlabel=xlabel,
         ylabel=ylabel,
         xticks=(1:7:size(x)[1], [xformatter(x) for x in 0:7:size(x)[1]]),

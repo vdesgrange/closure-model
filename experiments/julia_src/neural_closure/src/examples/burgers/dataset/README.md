@@ -55,7 +55,7 @@ m = 10
 
 Viscous burgers dataset using high dim gaussian conditions (multiple waves)
 ```
-viscous_burgers_high_dim_m10_256_j173.jld2
+viscous_burgers_high_dim_t2_64_xpi_64_nu0.04_typ2_m10_256_up16_j173.jld2.jld2
 Julia 1.7.3
 256
 t in [0., 2.]
@@ -63,7 +63,7 @@ x in [0., pi]
 t_n, x_n = 64, 64
 nu = 0.04
 initial conditions - high_dim 
-m = 5
+m = 10
 upscale = 16
 ```
 
