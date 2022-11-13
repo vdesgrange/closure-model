@@ -129,17 +129,17 @@ using OptimizationOptimisers
 include("../../neural_ode/models.jl");
 include("../../utils/generators.jl");
 
-epochs = 2; # Iterations
+epochs = 500; # Iterations
 ratio = 0.75; # train/val ratio
-lr = 0.003; # learning rate
-reg = 1e-8; # weigh decay (L2 reg)
+lr = 0.001; # learning rate
+reg = 1e-7; # weigh decay (L2 reg)
 noise = 0.05; # noise
 batch_size = 8;
 sol = Tsit5();
-tₙ = 128;
+tₙ = 64;
 xₙ = 64;
 xₘₐₓ = pi;
-Δx = xₘₐₓ / xₙ;
+Δx = xₘₐₓ / (xₙ - 1);
 ν = 0.04;
 snap_kwargs = (; ν, Δx, reg);
 
@@ -147,3 +147,4 @@ opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999));
 dataset = Generator.read_dataset("./dataset/viscous_burgers_high_dim_t2_64_xpi_64_nu0.04_typ2_m10_256_up16_j173.jld2")["training_set"];
 model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
 K, p, _ = training(model, epochs, dataset, opt, batch_size, ratio, noise, sol, snap_kwargs, false);
+@save "./models/viscous_burgers_high_dim_t2_64_xpi_64_nu0.04_typ2_m10_256_up16_j173.bson" K p
