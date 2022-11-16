@@ -39,7 +39,7 @@ function get_burgers_fft(t, Δx, xₙ, ν, u₀)
   end
 
   prob = ODEProblem(ODEFunction(f), copy(u₀), extrema(t), (ν, Δx))
-  sol = solve(prob, Rodas4P(), saveat=t, reltol=1e-6, abstol=1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())) 
+  sol = solve(prob, Tsit5(), saveat=t, reltol=1e-6, abstol=1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())) 
 
   return sol.t, hcat(sol.u...)
 end

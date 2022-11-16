@@ -65,9 +65,10 @@ function burgers_snapshot_generator(
 
   init = Dict([
     (1, (a, b) -> InitialFunctions.random_init(a, b)),
-    (2, (a, b) -> InitialFunctions.high_dim_random_init(a, b, init_kwargs...)), # a, b, m=20
+    (2, (a, b) -> InitialFunctions.high_dim_random_init2(a, b, init_kwargs...)), # a, b, m=20
     (3, (a, b) -> InitialFunctions.advecting_shock(a, b, init_kwargs...)), # a, b, nu
     (4, (a, b) -> InitialFunctions.random_gaussian_init(a, b, init_kwargs...)), # a, b, mu, sigma
+    (5, (a, b) -> InitialFunctions.high_dim_random_init3(a, b, init_kwargs...)), # a, b, m=20
   ]);
 
   u₀ = copy(init[rand_init](t, x));

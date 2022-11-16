@@ -46,6 +46,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   ep = 0;
   count = 0;
   ν, Δx, reg = kwargs;
+  val_loss =[];
 
   @info("Loading dataset") # train_dataset ou reference
   (train_loader, val_loader) = ProcessingTools.get_data_loader_cnn(train_dataset, batch_size, ratio, false, false);
@@ -54,8 +55,13 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   p, re = Flux.destructure(model);
   fᵣₒₘ =  (v, p, t) -> re(p)(v)
 
+  function f_closure(v, p, t)
+    Φ' * f(Φ * v, (ν, Δx), t) + fᵣₒₘ(v, p, t);
+  end
+  
   function predict_neural_ode(θ, x, t)
-    _prob = ODEProblem(fᵣₒₘ, x, extrema(t), θ, saveat=t);
+    _prob = ODEProblem(f_closure, reshape(x, size(x, 1), :), extrema(t), θ, saveat=t);
+    # _prob = ODEProblem(fᵣₒₘ, x, extrema(t), θ, saveat=t);
     ȳ = Array(solve(_prob, sol, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
     return permutedims(del_dim(ȳ), (1, 3, 2));
   end
@@ -89,31 +95,35 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     dv = Φ' * f(u, (ν, Δx), t)
     dv = reshape(v, mₙ, tₙ, :);
 
+    v = reshape(v, mₙ, :)
+    dv̂ = f_closure(v, θ, t);
+    dv̂ = reshape(dv̂, mₙ, tₙ, bₙ)
+
     #v = reshape(v, mₙ, 1, tₙ * bₙ) # CNN
-    dv̂ = fᵣₒₘ(v, θ, t);
+     # fᵣₒₘ(v, θ, t);
     #dv̂ = reshape(dv̂, mₙ, tₙ, bₙ) # CNN
 
     l = Flux.mse(dv̂, dv) + reg * sum(θ);
-    return l;
+    return l
   end
 
-  function val_loss(θ, x, u, t)
-    x = reshape(x, size(x, 1), :);
-    x = Φ' * x;
-    x = reshape(x, size(x, 1), 1, :);
+  function val_loss2(θ, x, u, t)
+      x = reshape(x, size(x, 1), :);
+      x = Φ' * x;
+      x = reshape(x, size(x, 1), 1, :);
 
-    v̂ = predict_neural_ode(θ, x, t[1]);
+      v̂ = predict_neural_ode(θ, x, t[1]);
 
-    u = reshape(u, size(u, 1), :)
-    v = Φ' * u; 
-    v = reshape(v, size(v̂, 1), size(v̂, 2), :);
+      u = reshape(u, size(u, 1), :);
+      v = Φ' * u; 
+      v = reshape(v, size(v̂, 1), size(v̂, 2), :);
 
-    lt = Flux.mse(v̂, v);
-    return lt;
+      lt = Flux.mse(v̂, v);
+      return lt;
   end
 
   function cb(θ, l)
-    @show(l)
+    # @show(l)
     count += 1;
 
     iter = (train_loader.nobs / train_loader.batchsize);
@@ -123,19 +133,23 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
         ltraj = 0;
 
         for (x, y, t) in val_loader
-            ltraj += val_loss(θ, x, y, t); 
+            ltraj += val_loss2(θ, x, y, t); 
         end
         ltraj /= (val_loader.nobs / val_loader.batchsize);
 
         @info("Epoch ", ep, ltraj);
+        push!(val_loss, ltraj);
+        # Plots.plot!(pl, LinRange(1, epochs, 1), val_loss);
+        # display(pl)
+
     end
     return false
   end
 
 
   @info("Initiate training")
-  @info("ADAM Trajectory fit")
-  optf = OptimizationFunction((θ, p, x, y, t) -> loss_trajectory_fit(θ, x, y, t), Optimization.AutoZygote());
+  @info("ADAM Derivative fit")
+  optf = OptimizationFunction((θ, p, x, y, t) -> loss_derivative_fit(θ, x, y, t), Optimization.AutoZygote());
   optprob = Optimization.OptimizationProblem(optf, p);
   result_neuralode = Optimization.solve(optprob, opt, ncycle(train_loader, epochs), callback=cb);
 
@@ -143,24 +157,25 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
 end
 
 # === Script ===
-
-begin
-  dataset = Generator.read_dataset("./dataset/viscous_burgers_high_dim_t2_64_xpi_64_nu0.04_typ2_m10_256_up16_j173.jld2")["training_set"];
+using Plots;
+# begin
+  dataset = Generator.read_dataset("./dataset/viscous_burgers_high_dim_t1_64_x1_64_nu0.001_typ2_m100_256_up2_j173.jld2")["training_set"];
   Φ_dataset, train_dataset = dataset[1:128], dataset[129:end];
 
-  epochs = 500;
-  ratio = 0.75;
+  epochs = 100;
+  ratio = 0.1; # 0.75
   batch_size = 8;
   lr = 1e-3;
   reg = 1e-7;
   noise = 0.05;
-  tₘₐₓ= 2.;
+  tₘₐₓ= 1.; # 2.
   tₘᵢₙ = 0.;
-  xₘₐₓ = pi;
+  xₘₐₓ = 1.; # pi
   xₘᵢₙ = 0;
   tₙ = 64;
   xₙ = 64;
-  ν = 0.04;
+  ν = 0.001; # 0.04
+  Δx = (xₘₐₓ - xₘᵢₙ) / (xₙ - 1);
   sol = Tsit5();
   x = LinRange(xₘᵢₙ, xₘₐₓ, xₙ);
   t = LinRange(tₘᵢₙ, tₘₐₓ, tₙ);
@@ -169,6 +184,8 @@ begin
  
   # === Get basis Φ ===
   Φ = get_Φ(Φ_dataset, m);
+
+
 
   # === Train ===
   opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999)); 
@@ -181,13 +198,33 @@ begin
   )
 
   K, Θ = training(model, epochs, train_dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);
-  @save "./models/fnn_3layers_viscous_burgers_high_dim_t2_64_xpi_64_nu0.04_typ2_m10_256_up16_j173.bson" K θ
+  # @save "./models/fnn_3layers_viscous_burgers_high_dim_t2_64_xpi_64_nu0.04_typ2_m10_256_up16_j173.bson" K θ
 
-end
+# end
 
   # === Check results ===
   # using Plots
   # include("../../utils/graphic_tools.jl")
+
+  t, u, _, _ = train_dataset[2];
+  û = galerkin_projection(t, u, Φ, ν, Δx, Δt);
+  û_prob = ODEProblem((v, p, t) ->  (Φ' * f(Φ * v, p, t)), Φ' * u[:, 1], extrema(t), (ν, Δx), saveat=t);
+  ū = Φ * Array(solve(û_prob, sol, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
+  # uₙₙ_prob = ODEProblem((v, p, t) -> K(v), Φ' * u[:, 1], extrema(t), θ; saveat=t);
+  # uₙₙ = Φ * Array(solve(_prob, Tsit5()));
+  # uᵧₙₙ_prob = ODEProblem(f_closure, Φ' * u[:, 1], extrema(t), θ; saveat=t);
+  # uᵧₙₙ = Φ * Array(solve(_prob, Tsit5()));
+  for (i, t) ∈ enumerate(t)
+    pl = Plots.plot(; xlabel = "x", ylim=extrema(u))
+    Plots.plot!(pl, x, u[:, i]; label = "FOM - Model 0")
+    Plots.plot!(pl, x, û[:, i]; label = "ROM - Model 1.0 GP")
+    Plots.plot!(pl, x, ū[:, i]; label = "ROM - Model 1.5 Φ'f(Φv)")
+    # Plots.plot!(pl, x, uₙₙ[:, i]; label = "ROM - Model 2 NN")
+    # Plots.plot!(pl, x, uₙₙ[:, i]; label = "ROM - Model 3  Φ'f(Φv) + NN")
+    # Plots.plot!(pl, x, uₙₙ[:, i]; label = "ROM - Model 4 GP + NN")
+    display(pl)
+  end
+  
 
   # t, u₀, u = Generator.get_burgers_batch(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, ν, 2, (; m=10));
   # v = Φ' * u;

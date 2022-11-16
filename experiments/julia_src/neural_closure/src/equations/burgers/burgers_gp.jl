@@ -62,8 +62,9 @@ function galerkin_projection(t, S, Φ, ν, dx, dt)
 
   # Compute online operators
   function gp(a, B_k, L_k, N_k)
-    dadt = B_k;
-    dadt += L_k * a;
+    dadt = zeros(size(a))
+    dadt .+= B_k;
+    dadt .+= L_k * a;
 
     for k in size(N_k, 1)
       dadt[k] = dadt[k] + (N_k[k, :, :] * a)' * a;
