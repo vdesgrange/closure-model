@@ -42,12 +42,7 @@ Process snapshot dataset of solution to ODE.
 Re-organize into 3 matrices: t values, initial values (x-snapshot), solution u (x-snapshot-t)
 """
 function process_dataset(dataset, keep_high_dim=true)
-  n = size(dataset, 1)
-
-  # todo - split between training and validation data
-  init_set = [];
-  true_set = [];
-  t = [];
+  t_set, init_set, true_set = [], [], [];
   for i in range(1, size(dataset, 1), step=1)
     if keep_high_dim
       t, u, _, _ = dataset[i];
@@ -55,14 +50,17 @@ function process_dataset(dataset, keep_high_dim=true)
       t, u = dataset[i];
     end
 
+    push!(t_set, copy(t));
     push!(init_set, copy(u[:, 1]));
     push!(true_set, copy(u));
   end
 
-  t_n = size(t, 1)
-  x_n = size(init_set[1], 1)
-
-  return t, hcat(init_set...), permutedims(reshape(hcat(true_set...), x_n, t_n, :), (1, 3, 2));
+  t_set = hcat(t_set...);
+  init_set = hcat(init_set...);
+  tₙ, xₙ = size(t_set, 1),  size(init_set, 1);
+  true_set = reshape(hcat(true_set...), xₙ, tₙ, :);
+  
+  return t_set, init_set, true_set;
 end
 
 
@@ -97,45 +95,29 @@ end
 
 Split dataset into training and validation set.
 """
-function get_data_loader(dataset, batch_size, ratio, split_axis=true, cuda=true)
-  if cuda && CUDA.has_cuda()
-    CUDA.allowscalar(false)
-    device = Flux.gpu
+function get_data_loader(dataset, batch_size, ratio, time_series)
+  t_set, init_set, true_set = ProcessingTools.process_dataset(dataset, false);
+
+  if (time_series)
+    t_train, t_val = splitobs(permutedims(t_set, (2, 1)), at = ratio);
+    train_set, val_set = splitobs(permutedims(true_set, (1, 3, 2)), at = ratio);
+    init_train, init_val = copy(train_set[:, :, 1]), copy(val_set[:, :, 1]);
+  
+    t_train, t_val = permutedims(t_train, (2, 1)), permutedims(t_val, (2, 1));
+    train_set, val_set = permutedims(train_set, (1, 3, 2)), permutedims(val_set, (1, 3, 2));
   else
-    device = Flux.cpu
-  end
-
-  t, init_set, true_set = ProcessingTools.process_dataset(dataset, false);
-
-  # True solution
-  if (split_axis)
-    t_train, t_val = splitobs(t, at = ratio);
+    t_train, t_val = splitobs(t_set, at = ratio);
+    init_train, init_val = splitobs(init_set, at = ratio);
     train_set, val_set = splitobs(true_set, at = ratio);
-  else
-    t_train, t_val = copy(t), copy(t);
-    switch_true_set = permutedims(true_set, (1, 3, 2));
-    train_set, val_set = splitobs(switch_true_set, at = ratio);
-    train_set = permutedims(train_set, (1, 3, 2));
-    val_set = permutedims(val_set, (1, 3, 2));
-  end
+  end;
 
-  # Initial condition
-  init_train = copy(train_set[:, :, 1]);
-  init_val = copy(val_set[:, :, 1]);
+  xᵥₙ, tᵥₙ, bᵥₙ = size(val_set)
 
-  train_set = permutedims(train_set, (1, 3, 2));
-  val_set = permutedims(val_set, (1, 3, 2));
-
-  # Set size
-  n_train = size(train_set, 3)
-  n_val = size(val_set, 3)
-
-  # Set data loader
-  train_data = (init_train |> device, train_set |> device, collect(ncycle([collect(t_train)], n_train)))
-  val_data = (init_val |> device, val_set |> device,  collect(ncycle([collect(t_val)], n_val)))
+  train_data = (init_train, train_set, t_train);
+  val_data = (init_val, val_set, t_val);
 
   train_loader = DataLoader(train_data, batchsize=batch_size, shuffle=true);
-  val_loader = DataLoader(val_data, batchsize=n_val, shuffle=false);
+  val_loader = DataLoader(val_data, batchsize=bᵥₙ, shuffle=false);
 
   return (train_loader, val_loader)
 end
@@ -145,14 +127,7 @@ end
 
 Split dataset into training and validation set.
 """
-function get_data_loader_cnn(dataset, batch_size, ratio, split_axis=true, cuda=true)
-  if cuda && CUDA.has_cuda()
-    CUDA.allowscalar(false)
-    device = Flux.gpu
-  else
-    device = Flux.cpu
-  end
-
+function get_data_loader_cnn(dataset, batch_size, ratio, split_axis=true)
   t, init_set, true_set = ProcessingTools.process_dataset(dataset, false);
 
   # True solution

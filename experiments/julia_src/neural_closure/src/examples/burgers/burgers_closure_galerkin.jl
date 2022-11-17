@@ -46,10 +46,10 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   ep = 0;
   count = 0;
   ν, Δx, reg = kwargs;
-  val_loss =[];
+  losses =[];
 
   @info("Loading dataset") # train_dataset ou reference
-  (train_loader, val_loader) = ProcessingTools.get_data_loader_cnn(train_dataset, batch_size, ratio, false, false);
+  (train_loader, val_loader) = ProcessingTools.get_data_loader(dataset, batch_size, ratio, false);
 
   @info("Building model")
   p, re = Flux.destructure(model);
@@ -60,7 +60,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   end
   
   function predict_neural_ode(θ, x, t)
-    _prob = ODEProblem(f_closure, reshape(x, size(x, 1), :), extrema(t), θ, saveat=t);
+    _prob = ODEProblem(f_closure, x, extrema(t), θ, saveat=t);
     # _prob = ODEProblem(fᵣₒₘ, x, extrema(t), θ, saveat=t);
     ȳ = Array(solve(_prob, sol, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
     return permutedims(del_dim(ȳ), (1, 3, 2));
@@ -69,18 +69,16 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   function loss_trajectory_fit(θ, x, u, t)
     xₙ, tₙ, bₙ = size(u);
     mₙ = size(Φ, 2);
-    u = reshape(u, xₙ, :)
-    x = reshape(x, xₙ, :)
 
     x̂ = Reg.gaussian_augment(Φ' * x, noise);
-    x̂ = reshape(x̂, mₙ, 1, bₙ)
+    # x̂ = reshape(x̂, mₙ, 1, bₙ) # CNN 
+    v̂  = predict_neural_ode(θ, x̂, t[:, 1]);
 
-    v̂  = predict_neural_ode(θ, x̂, t[1]);
-
+    u = reshape(u, xₙ, :)
     v = Φ' * u; 
     v = reshape(v, mₙ, tₙ, :);
 
-    l = Flux.mse(v̂, v)  + reg * sum(θ);
+    l = Flux.mse(v̂, v) + reg * sum(θ);
     return l;
   end
 
@@ -90,31 +88,26 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
 
     u = reshape(u, xₙ, :)
     v = Φ' * u; 
-    v = reshape(v, mₙ, tₙ, :);
+    dv = f(v, (ν, Δx), t);
+    # dv = reshape(dv, mₙ, tₙ, :);  # CNN
 
-    dv = Φ' * f(u, (ν, Δx), t)
-    dv = reshape(v, mₙ, tₙ, :);
-
-    v = reshape(v, mₙ, :)
+    # v = reshape(v, mₙ, 1, :) # CNN
     dv̂ = f_closure(v, θ, t);
-    dv̂ = reshape(dv̂, mₙ, tₙ, bₙ)
-
-    #v = reshape(v, mₙ, 1, tₙ * bₙ) # CNN
-     # fᵣₒₘ(v, θ, t);
-    #dv̂ = reshape(dv̂, mₙ, tₙ, bₙ) # CNN
+    # dv̂ = fᵣₒₘ(v, θ, t);
+   #  dv̂ = reshape(dv̂, mₙ, tₙ, bₙ)  # CNN
 
     l = Flux.mse(dv̂, dv) + reg * sum(θ);
     return l
   end
 
-  function val_loss2(θ, x, u, t)
-      x = reshape(x, size(x, 1), :);
+  function val_loss(θ, x, u, t)
+      xₙ = size(u, 1);
       x = Φ' * x;
-      x = reshape(x, size(x, 1), 1, :);
+      
+      # x = reshape(x, size(x, 1), 1, :); # CNN
+      v̂ = predict_neural_ode(θ, x, t[:, 1]);
 
-      v̂ = predict_neural_ode(θ, x, t[1]);
-
-      u = reshape(u, size(u, 1), :);
+      u = reshape(u, xₙ, :);
       v = Φ' * u; 
       v = reshape(v, size(v̂, 1), size(v̂, 2), :);
 
@@ -130,15 +123,15 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     if (count % iter == 0)
         ep += 1;
         count = 0;
-        ltraj = 0;
+        loss = 0;
 
         for (x, y, t) in val_loader
-            ltraj += val_loss2(θ, x, y, t); 
+          loss += val_loss(θ, x, y, t); 
         end
-        ltraj /= (val_loader.nobs / val_loader.batchsize);
+        loss /= (val_loader.nobs / val_loader.batchsize);
 
-        @info("Epoch ", ep, ltraj);
-        push!(val_loss, ltraj);
+        @info("Epoch ", ep, loss);
+        push!(losses, loss);
         # Plots.plot!(pl, LinRange(1, epochs, 1), val_loss);
         # display(pl)
 
@@ -146,10 +139,9 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     return false
   end
 
-
   @info("Initiate training")
-  @info("ADAM Derivative fit")
-  optf = OptimizationFunction((θ, p, x, y, t) -> loss_derivative_fit(θ, x, y, t), Optimization.AutoZygote());
+  @info("ADAM Trajectory fit")
+  optf = OptimizationFunction((θ, p, x, y, t) -> loss_trajectory_fit(θ, x, y, t), Optimization.AutoZygote());
   optprob = Optimization.OptimizationProblem(optf, p);
   result_neuralode = Optimization.solve(optprob, opt, ncycle(train_loader, epochs), callback=cb);
 
@@ -163,7 +155,7 @@ using Plots;
   Φ_dataset, train_dataset = dataset[1:128], dataset[129:end];
 
   epochs = 100;
-  ratio = 0.1; # 0.75
+  ratio = 0.75; # 0.75
   batch_size = 8;
   lr = 1e-3;
   reg = 1e-7;
@@ -179,13 +171,11 @@ using Plots;
   sol = Tsit5();
   x = LinRange(xₘᵢₙ, xₘₐₓ, xₙ);
   t = LinRange(tₘᵢₙ, tₘₐₓ, tₙ);
-  m = 20;
+  m = 3;
   snap_kwargs = (; ν, Δx, reg);
  
   # === Get basis Φ ===
   Φ = get_Φ(Φ_dataset, m);
-
-
 
   # === Train ===
   opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999)); 
@@ -195,32 +185,37 @@ using Plots;
     Flux.Dense(2m => 2m, tanh; init=Flux.glorot_uniform, bias=true),
     Flux.Dense(2m => m, tanh; init=Flux.glorot_uniform, bias=true),
     Flux.Dense(m => m, identity; init=Flux.glorot_uniform, bias=true),
-  )
+  );
 
-  K, Θ = training(model, epochs, train_dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);
+  K, θ = training(model, epochs, train_dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);
   # @save "./models/fnn_3layers_viscous_burgers_high_dim_t2_64_xpi_64_nu0.04_typ2_m10_256_up16_j173.bson" K θ
 
 # end
 
   # === Check results ===
-  # using Plots
-  # include("../../utils/graphic_tools.jl")
+  using Plots
+  include("../../utils/graphic_tools.jl")
+
+  function f_closure(v, p, t)
+    Φ' * f(Φ * v, (ν, Δx), t) + K(v);
+  end
 
   t, u, _, _ = train_dataset[2];
+  v₀ =  Φ' * u[:, 1];
   û = galerkin_projection(t, u, Φ, ν, Δx, Δt);
-  û_prob = ODEProblem((v, p, t) ->  (Φ' * f(Φ * v, p, t)), Φ' * u[:, 1], extrema(t), (ν, Δx), saveat=t);
+  û_prob = ODEProblem((v, p, t) ->  (Φ' * f(Φ * v, p, t)), v₀, extrema(t), (ν, Δx), saveat=t);
   ū = Φ * Array(solve(û_prob, sol, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
-  # uₙₙ_prob = ODEProblem((v, p, t) -> K(v), Φ' * u[:, 1], extrema(t), θ; saveat=t);
-  # uₙₙ = Φ * Array(solve(_prob, Tsit5()));
-  # uᵧₙₙ_prob = ODEProblem(f_closure, Φ' * u[:, 1], extrema(t), θ; saveat=t);
-  # uᵧₙₙ = Φ * Array(solve(_prob, Tsit5()));
+  uₙₙ_prob = ODEProblem((v, p, t) -> K(v), v₀, extrema(t), θ; saveat=t); reshape(v₀, (size(v₀, 1), :));
+  uₙₙ = Φ * Array(solve(uₙₙ_prob, Tsit5()));
+  uᵧₙₙ_prob = ODEProblem(f_closure, v₀, extrema(t), θ; saveat=t);
+  uᵧₙₙ = Φ * Array(solve(uᵧₙₙ_prob, Tsit5()));
   for (i, t) ∈ enumerate(t)
     pl = Plots.plot(; xlabel = "x", ylim=extrema(u))
     Plots.plot!(pl, x, u[:, i]; label = "FOM - Model 0")
-    Plots.plot!(pl, x, û[:, i]; label = "ROM - Model 1.0 GP")
+    # Plots.plot!(pl, x, û[:, i]; label = "ROM - Model 1.0 GP")
     Plots.plot!(pl, x, ū[:, i]; label = "ROM - Model 1.5 Φ'f(Φv)")
     # Plots.plot!(pl, x, uₙₙ[:, i]; label = "ROM - Model 2 NN")
-    # Plots.plot!(pl, x, uₙₙ[:, i]; label = "ROM - Model 3  Φ'f(Φv) + NN")
+    Plots.plot!(pl, x, uᵧₙₙ[:, i]; label = "ROM - Model 3  Φ'f(Φv) + NN(v)")
     # Plots.plot!(pl, x, uₙₙ[:, i]; label = "ROM - Model 4 GP + NN")
     display(pl)
   end

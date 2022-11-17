@@ -173,8 +173,8 @@ function generate_closure_dataset(
     print("Generating snapshot ", i, "...")
 
     tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, ν, typ = snap_kwargs[i];
-    tₕ, u = burgers_snapshot_generator(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ * upscale, xₙ * upscale, ν, typ, init_kwargs[i]);
-    û = ProcessingTools.downsampling(u, upscale);
+    tₕ, u = burgers_snapshot_generator(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ * upscale, xₙ * upscale, ν, typ, init_kwargs[i]); # (upscale * tₙ), (upscale * xₙ,tₙ)
+    û = ProcessingTools.downsampling(u, upscale);  # (xₙ, tₙ)
     tₗ = LinRange(tₘᵢₙ, tₘₐₓ, tₙ);
 
     item = [tₗ, û, snap_kwargs[i], init_kwargs[i]]
