@@ -2,7 +2,6 @@ using FFTW
 using AbstractFFTs
 using OrdinaryDiffEq
 using Plots
-using PyPlot
 using LinearAlgebra
 using SparseArrays
 using Random
@@ -13,8 +12,6 @@ include("../../equations/initial_functions.jl")
 include("../../utils/graphic_tools.jl")
 
 function show_state(u, x, y, title, xlabel, ylabel)
-  pyplot();
-
   xₙ, yₙ = size(x)[1], size(y)[1];
   xₘᵢₙ, xₘₐₓ = x[1], x[end];
   yₘᵢₙ, yₘₐₓ = y[1], y[end];
@@ -25,14 +22,14 @@ function show_state(u, x, y, title, xlabel, ylabel)
   pl = heatmap(u);
   heatmap!(pl,
       title = title,
-      dpi=600,
-      aspect_ratio = :equal,
-      reuse=false,
-      c=:dense,
+      # dpi=600,
+      # aspect_ratio = :equal,
+      # reuse=false,
+      # c=:dense,
       xlabel=xlabel,
       ylabel=ylabel,
-      xticks=(1:7:size(x)[1], [xformatter(x) for x in 0:7:size(x)[1]]),
-      yticks=(1:7:size(y)[1], [yformatter(y) for y in 0:7:size(y)[1]]),
+      # xticks=(1:7:size(x)[1], [xformatter(x) for x in 0:7:size(x)[1]]),
+      # yticks=(1:7:size(y)[1], [yformatter(y) for y in 0:7:size(y)[1]]),
   );
 
   return pl;
@@ -129,7 +126,6 @@ tmp = GraphicTools.show_state(u, t, x, "", "t", "x")
 GraphicTools.show_state(Wsol, t, x, "", "t", "x")
 GraphicTools.show_state(u .- Wsol, t, x, "", "t", "x")
 
-# using PyPlot
 # Plots.savefig(tmp, "test.png")
 
 # pl = Plots.plot(; xlabel = "x", ylims = extrema(sol[:, :]))

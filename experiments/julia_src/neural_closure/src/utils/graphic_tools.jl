@@ -1,7 +1,6 @@
 module GraphicTools
 
 using Plots
-using PyPlot
 
 
 function simple_plotter(ks, title="Simple plot", L=1.)
@@ -36,7 +35,6 @@ function show_state(u, x, y, title, xlabel, ylabel)
     - `xlabel::String`: x axis label
     - `ylabel::String`: y axis label
     """
-    pyplot();
 
     xₙ, yₙ = size(x)[1], size(y)[1];
     xₘᵢₙ, xₘₐₓ = x[1], x[end];
@@ -46,17 +44,17 @@ function show_state(u, x, y, title, xlabel, ylabel)
     yformatter = y -> string(round(y / yₙ * yₘₐₓ + yₘᵢₙ, digits=2));
 
     pl = heatmap(u);
-    heatmap!(pl,
+    heatmap!(pl;
         title = title,
-        dpi=600,
-        aspect_ratio = :equal,
-        reuse=false,
-        c=:dense,
-        grid=:none,
+        # dpi=600,
+        # aspect_ratio = :equal,
+        # reuse=false,
+        # c=:dense,
+        # grid=:none,
         xlabel=xlabel,
         ylabel=ylabel,
-        xticks=(1:7:size(x)[1], [xformatter(x) for x in 0:7:size(x)[1]]),
-        yticks=(1:7:size(y)[1], [yformatter(y) for y in 0:7:size(y)[1]]),
+        # xticks=(1:7:size(x)[1], [xformatter(x) for x in 0:7:size(x)[1]]),
+        # yticks=(1:7:size(y)[1], [yformatter(y) for y in 0:7:size(y)[1]]),
     );
 
     return pl;
@@ -76,7 +74,6 @@ function show_err(u, û, x, y, title, xlabel, ylabel)
     - `x::String`: x label
     - `y::String`: y label
     """
-    pyplot();
     xₙ, yₙ = size(x)[1], size(y)[1];
     xₘᵢₙ, xₘₐₓ = x[1], x[end];
     yₘᵢₙ, yₘₐₓ = y[1], y[end];
@@ -87,13 +84,13 @@ function show_err(u, û, x, y, title, xlabel, ylabel)
     pl = heatmap(abs.(u .- û), c=:dense);
     heatmap!(pl,
         title = title,
-        dpi=600,
-        aspect_ratio = :equal,
-        reuse=false,
+        # dpi=600,
+        # aspect_ratio = :equal,
+        # reuse=false,
         xlabel=xlabel,
         ylabel=ylabel,
-        xticks=(1:7:size(x)[1], [xformatter(x) for x in 0:7:size(x)[1]]),
-        yticks=(1:7:size(y)[1], [yformatter(y) for y in 0:7:size(y)[1]]),
+        # xticks=(1:7:size(x)[1], [xformatter(x) for x in 0:7:size(x)[1]]),
+        # yticks=(1:7:size(y)[1], [yformatter(y) for y in 0:7:size(y)[1]]),
     );
 
     return pl;

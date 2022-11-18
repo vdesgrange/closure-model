@@ -1,7 +1,6 @@
 using OrdinaryDiffEq
 using SciMLSensitivity
 using Plots
-using PyPlot
 using SparseArrays
 using Distributions
 
