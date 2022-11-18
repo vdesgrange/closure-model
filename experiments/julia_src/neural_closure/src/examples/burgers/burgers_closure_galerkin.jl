@@ -1,14 +1,16 @@
+using BSON: @save
 using Flux
+using IterTools: ncycle
 using Optimization
 using OptimizationOptimisers
+using Plots
 using SciMLSensitivity
-using IterTools: ncycle
-using BSON: @save
 
 include("../../utils/processing_tools.jl")
 include("../../neural_ode/models.jl")
 include("../../neural_ode/regularization.jl")
 include("../../utils/generators.jl");
+include("../../utils/graphic_tools.jl")
 include("../../equations/burgers/burgers_gp.jl")
 include("../../rom/pod.jl")
 
@@ -74,14 +76,13 @@ function training(
     function predict_neural_ode(θ, x, t)
         prob = ODEProblem(f_closure, x, extrema(t), θ)
         # prob = ODEProblem(fᵣₒₘ, x, extrema(t), θ, saveat=t);
-        sol =
-            solve(
-                prob,
-                solver;
-                saveat = t,
-                sensealg = InterpolatingAdjoint(; autojacvec = ZygoteVJP()),
-            ),
-            ȳ = Array(solver)
+        sol = solve(
+            prob,
+            solver;
+            saveat = t,
+            sensealg = InterpolatingAdjoint(; autojacvec = ZygoteVJP()),
+        )
+        ȳ = Array(sol)
         return permutedims(del_dim(ȳ), (1, 3, 2))
     end
 
@@ -138,7 +139,8 @@ function training(
         # @show(l)
         count += 1
 
-        iter = (train_loader.nobs / train_loader.batchsize)
+        # iter = (train_loader.nobs / train_loader.batchsize)
+        iter = 8
         if (count % iter == 0)
             ep += 1
             count = 0
@@ -147,7 +149,7 @@ function training(
             for (x, y, t) in val_loader
                 loss += val_loss(θ, x, y, t)
             end
-            loss /= (val_loader.nobs / val_loader.batchsize)
+            # loss /= (val_loader.nobs / val_loader.batchsize)
 
             @info("Epoch ", ep, loss)
             push!(losses, loss)
@@ -159,9 +161,9 @@ function training(
     end
 
     @info("Initiate training")
-    @info("ADAM Trajectory fit")
     optf = OptimizationFunction(
-        (θ, p, x, y, t) -> loss_trajectory_fit(θ, x, y, t),
+        # (θ, p, x, y, t) -> loss_trajectory_fit(θ, x, y, t),
+        (θ, p, x, y, t) -> loss_derivative_fit(θ, x, y, t),
         Optimization.AutoZygote(),
     )
     optprob = Optimization.OptimizationProblem(optf, p)
@@ -171,15 +173,12 @@ function training(
     return re(result_neuralode), Array(result_neuralode)
 end
 
-# === Script ===
-using Plots;
-# begin
 dataset = Generator.read_dataset(
     "./dataset/viscous_burgers_high_dim_t1_64_x1_64_nu0.001_typ2_m100_256_up2_j173.jld2",
 )["training_set"];
 Φ_dataset, train_dataset = dataset[1:128], dataset[129:end];
 
-epochs = 100;
+epochs = 10;
 ratio = 0.75; # 0.75
 batch_size = 8;
 lr = 1e-3;
@@ -196,7 +195,7 @@ xₙ = 64;
 solver = Tsit5();
 x = LinRange(xₘᵢₙ, xₘₐₓ, xₙ);
 t = LinRange(tₘᵢₙ, tₘₐₓ, tₙ);
-m = 3;
+m = 10;
 snap_kwargs = (; ν, Δx, reg);
 
 # === Get basis Φ ===
@@ -227,11 +226,8 @@ K, θ = training(
 );
 # @save "./models/fnn_3layers_viscous_burgers_high_dim_t2_64_xpi_64_nu0.04_typ2_m10_256_up16_j173.bson" K θ
 
-# end
 
 # === Check results ===
-using Plots
-include("../../utils/graphic_tools.jl")
 
 function f_closure(v, p, t)
     Φ' * f(Φ * v, (ν, Δx), t) + K(v)
