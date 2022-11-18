@@ -4,7 +4,6 @@ using CUDA
 using BSON: @save
 using Flux
 using OrdinaryDiffEq
-using DiffEqFlux
 using Optimization
 using IterTools: ncycle
 
@@ -53,7 +52,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
 
   function predict_neural_ode(θ, x, t)
     _prob = ODEProblem(f_nn, x, extrema(t), θ, saveat=t);
-    ȳ = solve(_prob, sol, u0=x, p=θ,  abstol=1e-6, reltol=1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));  # BacksolveAdjoint work
+    ȳ = solve(_prob, sol, u0=x, p=θ,  abstol=1e-6, reltol=1e-6, sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()));  # BacksolveAdjoint work
     ȳ = Array(ȳ);
     return permutedims(del_dim(ȳ), (1, 3, 2));
   end

@@ -1,7 +1,7 @@
 using FFTW
 using AbstractFFTs
 using OrdinaryDiffEq
-using DiffEqSensitivity
+using SciMLSensitivity
 using Statistics
 using Zygote
 

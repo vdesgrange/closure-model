@@ -2,9 +2,8 @@
 
 using Zygote
 using Flux
-using DiffEqFlux
 using OrdinaryDiffEq
-using DiffEqSensitivity
+using SciMLSensitivity
 using Optimization
 using OptimizationOptimisers
 using IterTools: ncycle
@@ -48,7 +47,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
 
     function predict_neural_ode(θ, x, t)
         _prob = ODEProblem(f_nn, x, extrema(t), θ, saveat=t);
-        ȳ = solve(_prob, sol, u0=x, p=θ, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));  # BacksolveAdjoint work
+        ȳ = solve(_prob, sol, u0=x, p=θ, sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()));  # BacksolveAdjoint work
         ȳ = Array(ȳ);
         return permutedims(del_dim(ȳ), (1, 3, 2));
     end
@@ -90,7 +89,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
             ltraj = 0;
 
             for (x, y, t) in val_loader
-                a, b = val_loss(θ, x, y, t); 
+                a, b = val_loss(θ, x, y, t);
                 lval += a;
                 ltraj += b;
             end
@@ -147,7 +146,7 @@ xₘₐₓ = 1.;
 κ = 0.01;
 snap_kwargs = (; Δx, κ, reg);
 
-opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999)); 
+opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999));
 dataset = Generator.read_dataset("./dataset/diffusion_n256_k0.01_N15_analytical_t1_64_x1_64_up16.jld2")["training_set"];
 cleaned_dataset = [];
 for data in dataset
@@ -156,6 +155,5 @@ end
 
 model = Models.LinearModel(xₙ);
 K, p, _ = training(model, epochs, cleaned_dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);
- 
-# @save "./models/diffusion_k0.01_N15_analytical_t1_64_x1_64_ep500_traj.bson" K p
 
+# @save "./models/diffusion_k0.01_N15_analytical_t1_64_x1_64_ep500_traj.bson" K p

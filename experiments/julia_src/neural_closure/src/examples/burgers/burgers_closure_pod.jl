@@ -5,9 +5,8 @@ using AbstractFFTs
 using Statistics
 using Zygote
 using Flux
-using DiffEqFlux
 using OrdinaryDiffEq
-using DiffEqSensitivity
+using SciMLSensitivity
 using Optimization
 using OptimizationOptimisers
 using IterTools: ncycle
@@ -44,7 +43,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
 
     @info("Loading dataset")
     (train_loader, val_loader) = ProcessingTools.get_data_loader_cnn(dataset, batch_size, ratio, false, false);
-  
+
     tmp = [];
     for (x, y, t) in train_loader
         push!(tmp, y);
@@ -72,7 +71,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
 
     function predict_neural_ode(θ, x, t)
         _prob = ODEProblem(f_closure, x, extrema(t), θ, saveat=t);
-        ȳ = solve(_prob, sol, u0=x, p=θ, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())); # , abstol=1e-7, reltol=1e-7
+        ȳ = solve(_prob, sol, u0=x, p=θ, sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP())); # , abstol=1e-7, reltol=1e-7
         ȳ = Array(ȳ);
         return permutedims(del_dim(ȳ), (1, 3, 2));
     end
@@ -93,7 +92,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
         dy = f(y, (ν, Δx), t)
         l = Flux.mse(dŷ, dy) + reg * sum(θ)
     end
-  
+
     function loss_trajectory_fit(θ, x, y, t)
         x̂ = Reg.gaussian_augment(x, noise);
         ŷ = predict_neural_ode(θ, x̂, t[1]);
@@ -124,7 +123,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
             ltraj = 0;
 
             for (x, y, t) in val_loader
-                a, b = val_loss(θ, x, y, t); 
+                a, b = val_loss(θ, x, y, t);
                 lval += a;
                 ltraj += b;
             end
@@ -169,7 +168,7 @@ snap_kwargs = (; xₙ, ν, Δx, reg);
 init_kwargs = (; m=10);
 x =  LinRange(xₘᵢₙ, xₘₐₓ, xₙ);
 
-opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999)); 
+opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999));
 dataset = Generator.read_dataset("./dataset/inviscid_burgers_high_dim_m10_256_j173.jld2")["training_set"];
 model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
 K, p, Φ, _ = training(model, epochs, dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);

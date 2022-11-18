@@ -1,5 +1,3 @@
-using JLD2
-
 include("../processing_tools.jl")
 include("../../rom/pod.jl")
 include("../../equations/equations.jl")
@@ -77,7 +75,7 @@ function generate_kdv_dataset(
     snap_kwargs=(;),
     init_kwargs=(;)
     )
-  
+
     tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, typ = snap_kwargs;
     x = LinRange(xₘᵢₙ, xₘₐₓ , xₙ);
     Δx = round((xₘₐₓ - xₘᵢₙ) / (xₙ - 1), digits=8);
@@ -90,20 +88,19 @@ function generate_kdv_dataset(
     train_set = [];
     for i in range(1, n, step=1)
       print("Generating snapshot ", i, "...")
-  
+
       tₕ, u = kdv_snapshot_generator(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ * upscale, typ, init_kwargs); # tₙ * upscale
       û = ProcessingTools.downsampling_x(u, upscale);
 
       item = [tₕ, û, snap_kwargs, init_kwargs]
       push!(train_set, item);
-  
+
       println("Done")
     end
-  
+
     if !isempty(filename)
       JLD2.save(filename, "training_set", train_set);
     end
-  
+
     return train_set
   end
-  

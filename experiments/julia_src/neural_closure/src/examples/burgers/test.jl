@@ -2,7 +2,7 @@ using BenchmarkTools
 using Flux
 using Optimization
 using OptimizationOptimisers
-using DiffEqSensitivity
+using SciMLSensitivity
 using IterTools: ncycle
 using Plots;
 using BSON: @save, @load
@@ -108,14 +108,14 @@ t, u₀, u = Generator.get_burgers_batch(4 * tₘₐₓ, tₘᵢₙ, 4 * xₘₐ
 
 function test1()
   _ref = ODEProblem(f, u₀, extrema(t), (ν, Δx); saveat=t);
-  ū = Array(solve(_ref, Tsit5(), reltol=1e-6, abstol=1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()))); 
+  ū = Array(solve(_ref, Tsit5(), reltol=1e-6, abstol=1e-6, sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
 end;
 @btime test1();
 @profview test1();
 
 function test2()
 _prob = ODEProblem((u, p, t) -> K(u), reshape(u₀, :, 1, 1), extrema(t), p; saveat=t);
-  û = Array(solve(_prob, Tsit5(), reltol=1e-6, abstol=1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
+  û = Array(solve(_prob, Tsit5(), reltol=1e-6, abstol=1e-6, sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
 end;
 @btime test2();
 @profview test2();
@@ -124,7 +124,7 @@ display(GraphicTools.show_state(u, t, x, "", "t", "x"))
 display(GraphicTools.show_state(ū, t, x, "", "t", "x"))
 display(GraphicTools.show_state(û[:, 1, 1, :], 2 * t, 2 * x, "", "t", "x"))
 display(GraphicTools.show_err(u, û[:, 1, 1, :], 2 * t, 2 * x, "", "t", "x"))
-  
+
 # # display(GraphicTools.show_state(Φ * v̄[:, 1, 1, :], t, x, "", "t", "x"))
   # # display(GraphicTools.show_state(Φ * v̂, t, x, "", "t", "x"))
 
@@ -155,7 +155,7 @@ û = gp_set[1][2]; # include Φ
 
 _prob = ODEProblem(K, reshape(v₀, :, 1, 1), extrema(t), θ; saveat=t);
 v̄ = solve(_prob, Tsit5());
-# v̄ = Array(solve(_prob, Tsit5(), p=θ, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
+# v̄ = Array(solve(_prob, Tsit5(), p=θ, sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
 size(v̄)
 display(GraphicTools.show_state(Φ * v, t, x, "", "t", "x"))
 display(GraphicTools.show_state(Φ * v̄[:, 1, 1, :], t, x, "", "t", "x"))
@@ -168,4 +168,3 @@ for (i, t) ∈ enumerate(t)
   Plots.plot!(pl, x, Φ * v̄[:, 1, 1, i]; label = "ROM - Model 2")
   display(pl)
 end
-

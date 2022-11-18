@@ -4,8 +4,7 @@ using CUDA
 using BSON: @save
 using Flux
 using OrdinaryDiffEq
-using DiffEqSensitivity
-using DiffEqFlux
+using SciMLSensitivity
 
 include("../../utils/processing_tools.jl")
 include("../../neural_ode/regularization.jl")
@@ -41,7 +40,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   function predict_neural_ode(x, t)
     tspan = (float(t[1]), float(t[end]));
     _prob = remake(prob; u0=x, p=p, tspan=tspan);
-    Array(solve(_prob, sol, u0=x, p=p, abstol=1e-9, reltol=1e-9, saveat=t, sensealg=DiffEqSensitivity.BacksolveAdjoint(autodiff=true)));
+    Array(solve(_prob, sol, u0=x, p=p, abstol=1e-9, reltol=1e-9, saveat=t, sensealg=BacksolveAdjoint(autodiff=true)));
   end
 
   function loss(x, y, t)

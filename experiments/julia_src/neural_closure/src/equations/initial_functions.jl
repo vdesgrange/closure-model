@@ -5,7 +5,6 @@ export gaussian_init, random_init, high_dim_random_init, burgers_analytical_init
 using LinearAlgebra
 using SparseArrays
 using OrdinaryDiffEq
-using DiffEqFlux
 using Random
 using Distributions
 

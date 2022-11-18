@@ -1,7 +1,7 @@
 using Flux
 using Optimization
 using OptimizationOptimisers
-using DiffEqSensitivity
+using SciMLSensitivity
 using IterTools: ncycle
 using BSON: @save
 
@@ -58,11 +58,11 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   function f_closure(v, p, t)
     Φ' * f(Φ * v, (ν, Δx), t) + fᵣₒₘ(v, p, t);
   end
-  
+
   function predict_neural_ode(θ, x, t)
     _prob = ODEProblem(f_closure, x, extrema(t), θ, saveat=t);
     # _prob = ODEProblem(fᵣₒₘ, x, extrema(t), θ, saveat=t);
-    ȳ = Array(solve(_prob, sol, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
+    ȳ = Array(solve(_prob, sol, sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
     return permutedims(del_dim(ȳ), (1, 3, 2));
   end
 
@@ -71,11 +71,11 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     mₙ = size(Φ, 2);
 
     x̂ = Reg.gaussian_augment(Φ' * x, noise);
-    # x̂ = reshape(x̂, mₙ, 1, bₙ) # CNN 
+    # x̂ = reshape(x̂, mₙ, 1, bₙ) # CNN
     v̂  = predict_neural_ode(θ, x̂, t[:, 1]);
 
     u = reshape(u, xₙ, :)
-    v = Φ' * u; 
+    v = Φ' * u;
     v = reshape(v, mₙ, tₙ, :);
 
     l = Flux.mse(v̂, v) + reg * sum(θ);
@@ -87,7 +87,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     mₙ = size(Φ, 2);
 
     u = reshape(u, xₙ, :)
-    v = Φ' * u; 
+    v = Φ' * u;
     dv = f(v, (ν, Δx), t);
     # dv = reshape(dv, mₙ, tₙ, :);  # CNN
 
@@ -103,12 +103,12 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
   function val_loss(θ, x, u, t)
       xₙ = size(u, 1);
       x = Φ' * x;
-      
+
       # x = reshape(x, size(x, 1), 1, :); # CNN
       v̂ = predict_neural_ode(θ, x, t[:, 1]);
 
       u = reshape(u, xₙ, :);
-      v = Φ' * u; 
+      v = Φ' * u;
       v = reshape(v, size(v̂, 1), size(v̂, 2), :);
 
       lt = Flux.mse(v̂, v);
@@ -126,7 +126,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
         loss = 0;
 
         for (x, y, t) in val_loader
-          loss += val_loss(θ, x, y, t); 
+          loss += val_loss(θ, x, y, t);
         end
         loss /= (val_loader.nobs / val_loader.batchsize);
 
@@ -173,12 +173,12 @@ using Plots;
   t = LinRange(tₘᵢₙ, tₘₐₓ, tₙ);
   m = 3;
   snap_kwargs = (; ν, Δx, reg);
- 
+
   # === Get basis Φ ===
   Φ = get_Φ(Φ_dataset, m);
 
   # === Train ===
-  opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999)); 
+  opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999));
   # model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
   model = Flux.Chain(
     v -> vcat(v, v.^2),
@@ -204,7 +204,7 @@ using Plots;
   v₀ =  Φ' * u[:, 1];
   û = galerkin_projection(t, u, Φ, ν, Δx, Δt);
   û_prob = ODEProblem((v, p, t) ->  (Φ' * f(Φ * v, p, t)), v₀, extrema(t), (ν, Δx), saveat=t);
-  ū = Φ * Array(solve(û_prob, sol, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
+  ū = Φ * Array(solve(û_prob, sol, sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
   uₙₙ_prob = ODEProblem((v, p, t) -> K(v), v₀, extrema(t), θ; saveat=t); reshape(v₀, (size(v₀, 1), :));
   uₙₙ = Φ * Array(solve(uₙₙ_prob, Tsit5()));
   uᵧₙₙ_prob = ODEProblem(f_closure, v₀, extrema(t), θ; saveat=t);
@@ -219,7 +219,7 @@ using Plots;
     # Plots.plot!(pl, x, uₙₙ[:, i]; label = "ROM - Model 4 GP + NN")
     display(pl)
   end
-  
+
 
   # t, u₀, u = Generator.get_burgers_batch(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, ν, 2, (; m=10));
   # v = Φ' * u;

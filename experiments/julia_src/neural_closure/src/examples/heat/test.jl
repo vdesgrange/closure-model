@@ -1,5 +1,5 @@
 using OrdinaryDiffEq
-using DiffEqSensitivity
+using SciMLSensitivity
 using Plots
 using PyPlot
 using SparseArrays
@@ -111,7 +111,7 @@ end
 function check_result(K, θ)
     t, u₀, ū = Generator.get_heat_batch(2., 0., 1., 0., 64, 64, 3, (;κ = 0.01, N=15));
     _prob = ODEProblem((u, p, t) -> K(u), x, extrema(t), p, saveat=t);
-    ȳ = solve(_prob, sol, u0=u₀, p=θ, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));  # BacksolveAdjoint work
+    ȳ = solve(_prob, sol, u0=u₀, p=θ, sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()));  # BacksolveAdjoint work
     ȳ = Array(ȳ);
 
     Plots.plot(
@@ -129,7 +129,7 @@ check_result(K, p)
 x = LinRange(0., 1., 64);
 t, u₀, ū = Generator.get_heat_batch(2., 0., 1., 0., 64, 64, 3, (;κ = 0.01, N=15));
 _prob = ODEProblem((u, p, t) -> K(u), x, extrema(t), p, saveat=t);
-ȳ = solve(_prob, sol, u0=u₀, p=p, dt=0.001, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
+ȳ = solve(_prob, sol, u0=u₀, p=p, dt=0.001, sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
 ȳ = Array(ȳ);
 
 gr(size=(600,525))

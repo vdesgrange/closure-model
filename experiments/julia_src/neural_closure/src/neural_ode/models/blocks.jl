@@ -2,7 +2,6 @@ module Block
 
 using LinearAlgebra
 using Flux
-using DiffEqFlux
 
 function MomentumT(x) # t
   X = x[:, 2:end, :] .- x[:, 1:end-1, :]

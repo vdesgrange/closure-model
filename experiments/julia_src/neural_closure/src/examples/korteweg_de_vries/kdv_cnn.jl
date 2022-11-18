@@ -3,9 +3,8 @@ using AbstractFFTs
 using Statistics
 using Zygote
 using Flux
-using DiffEqFlux
 using OrdinaryDiffEq
-using DiffEqSensitivity
+using SciMLSensitivity
 using Optimization
 using OptimizationOptimisers
 using IterTools: ncycle
@@ -28,7 +27,7 @@ function f(u, p, t)
     u₋ = circshift(u, 1);
     u₊ = circshift(u, -1);
     u₊₊ = circshift(u, -2);
-  
+
     uₓ = (u₊ - u₋) ./ (2 * Δx);
     uₓₓₓ = (-u₋₋ .+ 2u₋ .- 2u₊ + u₊₊) ./ (2 * Δx^3);
     uₜ = -(6u .* uₓ) .- uₓₓₓ;
@@ -55,11 +54,11 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
 
     function predict_neural_ode(θ, x, t)
         _prob = ODEProblem(f_nn, x, extrema(t), θ, saveat=t);
-        ȳ = solve(_prob, sol, u0=x, p=θ, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));  # BacksolveAdjoint work
+        ȳ = solve(_prob, sol, u0=x, p=θ, sensealg=InterpolatingAdjoint(; autojacvec=ZygoteVJP()));  # BacksolveAdjoint work
         ȳ = Array(ȳ);
         return permutedims(del_dim(ȳ), (1, 3, 2));
     end
-    
+
 
     # function loss_derivative_fit(θ, x, u, t)
     #     mean(eachslice(u; dims = 2)) do y
@@ -108,7 +107,7 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
             ltraj = 0;
 
             for (x, y, t) in val_loader
-                a, b = val_loss(θ, x, y, t); 
+                a, b = val_loss(θ, x, y, t);
                 lval += a;
                 ltraj += b;
             end
@@ -162,7 +161,7 @@ xₘₐₓ = 4 * pi;
 Δx = xₘₐₓ / xₙ;
 snap_kwargs = (; Δx, reg);
 
-opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999)); 
+opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999));
 dataset = Generator.read_dataset("./dataset/kdv_high_dim_n128_m3_t5_128_x4pi_64_up2.jld2")["training_set"];
 model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
 K, p, _ = training(model, epochs, dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);

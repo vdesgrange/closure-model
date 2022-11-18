@@ -1,11 +1,10 @@
 using Flux
-using DiffEqFlux
 
-function HeatModel(x_n)
-  return FastChain(
-    DiffEqFlux.FastDense(x_n, x_n, identity; bias=false, initW=Flux.zeros32)
-  )
-end
+# function HeatModel(x_n)
+#   return FastChain(
+#     DiffEqFlux.FastDense(x_n, x_n, identity; bias=false, initW=Flux.zeros32)
+#   )
+# end
 
 function BasicAutoEncoder(x_n)
   """
@@ -23,4 +22,3 @@ function BasicAutoEncoder(x_n)
     Flux.Dense(round(Int64, x_n / 2), x_n, identity; bias=true, init=Flux.kaiming_uniform),
   )
 end
-

@@ -1,7 +1,7 @@
 using FFTW
 using AbstractFFTs
 using OrdinaryDiffEq
-using DiffEqSensitivity
+using SciMLSensitivity
 using SparseArrays
 using Distributions
 
@@ -25,13 +25,13 @@ function get_heat_fd_impl(Δt, Δx, tₙ, xₙ, u₀)
     u[i, 1] = 0
     u[i, end] = 0
   end
-  
+
   return u
 end
 
 """
 Central finite difference method
-Solve diffusion equation 
+Solve diffusion equation
 with central finite difference method using order 2 of accuracy.
 """
 function get_heat_fd(t, Δx, u₀, κ)
@@ -46,12 +46,12 @@ function get_heat_fd(t, Δx, u₀, κ)
 
     uₓₓ = (u₊ .- 2 .* u .+ u₋) ./ Δx^2;
     uₜ = κ * uₓₓ;
-  
+
     return uₜ
   end
-  
+
   prob = ODEProblem(ODEFunction(f), u₀, extrema(t), (Δx, κ));
-  sol = solve(prob, Tsit5(), saveat=t, dt=0.01); 
+  sol = solve(prob, Tsit5(), saveat=t, dt=0.01);
   return sol.t, Array(sol)
 end
 

@@ -5,7 +5,6 @@ using AbstractFFTs
 using Statistics
 using Zygote
 using Flux
-using DiffEqFlux
 using OrdinaryDiffEq
 using BSON: @save
 
