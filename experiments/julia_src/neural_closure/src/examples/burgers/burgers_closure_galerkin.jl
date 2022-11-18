@@ -1,10 +1,14 @@
 using BSON: @save
 using Flux
 using IterTools: ncycle
+using LinearAlgebra
 using Optimization
 using OptimizationOptimisers
 using Plots
+using Printf
+using Random
 using SciMLSensitivity
+using Zygote
 
 include("../../utils/processing_tools.jl")
 include("../../neural_ode/models.jl")
@@ -26,9 +30,6 @@ function f(u, p, t)
     du
 end
 
-del_dim(x::Array{Float64,4}) = reshape(x, (size(x)[1], size(x)[3], size(x)[4]))
-del_dim(x::Array{Float64,3}) = x
-
 function get_Φ(dataset, m)
     tmp = []
     for (i, data) in enumerate(dataset)
@@ -45,132 +46,127 @@ function get_Φ(dataset, m)
     return Φ
 end
 
-function training(
-    model,
-    epochs,
-    dataset,
-    opt,
-    batch_size,
-    ratio,
-    noise = 0.0,
-    solver = Tsit5(),
-    kwargs = (;),
+"""
+    predict(f, v₀, p, t, solver; kwargs...)
+
+Predict solution given parameters `p`.
+"""
+function predict(f, v₀, p, t, solver; kwargs...)
+    problem = ODEProblem(f, v₀, extrema(t), p)
+    sol = solve(problem, solver; saveat = t, kwargs...)
+    Array(sol)
+end
+
+"""
+    loss_trajectory_fit(
+        f, p, u, t, solver, λ = 1e-8;
+        nsolution = size(u, 2),
+        ntime = size(u, 3),
+        kwargs...,
+    )
+
+Compute trajectory-fitting loss.
+Selects a random subset of solutions and time points at each evaluation.
+Further `kwargs` are passed to the ODE solver.
+"""
+function loss_trajectory_fit(
+    f,
+    p,
+    v,
+    t,
+    solver,
+    λ = 1e-8;
+    nsolution = size(v, 2),
+    ntime = size(v, 3),
+    kwargs...,
 )
-    ep = 0
-    count = 0
-    ν, Δx, reg = kwargs
-    losses = []
+    # Select a random subset (batch)
+    is = Zygote.@ignore sort(shuffle(1:size(v, 2))[1:nsolution])
+    it = Zygote.@ignore sort(shuffle(1:length(t))[1:ntime])
+    v = v[:, is, it]
 
-    @info("Loading dataset") # train_dataset ou reference
-    (train_loader, val_loader) =
-        ProcessingTools.get_data_loader(dataset, batch_size, ratio, false)
+    # Predicted soluton
+    sol = predict(f, v[:, :, 1], p, t, solver; kwargs...)
 
-    @info("Building model")
-    p, re = Flux.destructure(model)
-    fᵣₒₘ = (v, p, t) -> re(p)(v)
+    # Relative squared error
+    data = sum(abs2, sol - v) / sum(abs2, v)
 
-    function f_closure(v, p, t)
-        Φ' * f(Φ * v, (ν, Δx), t) + fᵣₒₘ(v, p, t)
-    end
+    # Regularization term
+    reg = sum(abs2, p) / length(p)
 
-    function predict_neural_ode(θ, x, t)
-        prob = ODEProblem(f_closure, x, extrema(t), θ)
-        # prob = ODEProblem(fᵣₒₘ, x, extrema(t), θ, saveat=t);
-        sol = solve(
-            prob,
-            solver;
-            saveat = t,
-            sensealg = InterpolatingAdjoint(; autojacvec = ZygoteVJP()),
-        )
-        ȳ = Array(sol)
-        return permutedims(del_dim(ȳ), (1, 3, 2))
-    end
+    # Loss
+    data + λ * reg
+end
 
-    function loss_trajectory_fit(θ, x, u, t)
-        xₙ, tₙ, bₙ = size(u)
-        mₙ = size(Φ, 2)
+"""
+    loss_derivative_fit(f, p, dvdt, v, λ; nsample = size(v, 2))
 
-        x̂ = Reg.gaussian_augment(Φ' * x, noise)
-        # x̂ = reshape(x̂, mₙ, 1, bₙ) # CNN
-        v̂ = predict_neural_ode(θ, x̂, t[:, 1])
+Compute derivative-fitting loss.
+Selects a random subset of samples at each evaluation.
+"""
+function loss_derivative_fit(f, p, dvdt, v, λ; nsample = size(v, 2))
+    # Select a random subset (batch)
+    i = Zygote.@ignore sort(shuffle(1:size(v, 2))[1:nsample])
+    v = v[:, i]
+    dvdt = dvdt[:, i]
 
-        u = reshape(u, xₙ, :)
-        v = Φ' * u
-        v = reshape(v, mₙ, tₙ, :)
+    # Predicted right hand side
+    rhs = f(v, p, 0)
 
-        l = Flux.mse(v̂, v) + reg * sum(θ)
-        return l
-    end
+    # Relative squared error
+    data = sum(abs2, rhs - dvdt) / sum(abs2, dvdt)
 
-    function loss_derivative_fit(θ, x, u, t)
-        xₙ, tₙ, bₙ = size(u)
-        mₙ = size(Φ, 2)
+    # Regularization term
+    reg = sum(abs2, p) / length(p)
 
-        u = reshape(u, xₙ, :)
-        v = Φ' * u
-        dv = f(v, (ν, Δx), t)
-        # dv = reshape(dv, mₙ, tₙ, :);  # CNN
+    # Loss
+    data + λ * reg
+end
 
-        # v = reshape(v, mₙ, 1, :) # CNN
-        dv̂ = f_closure(v, θ, t)
-        # dv̂ = fᵣₒₘ(v, θ, t);
-        # dv̂ = reshape(dv̂, mₙ, tₙ, bₙ)  # CNN
+function relative_error(f, p, v, t, solver; kwargs...)
+    # Predicted soluton
+    sol = predict(f, v[:, :, 1], p, t, solver; kwargs...)
 
-        l = Flux.mse(dv̂, dv) + reg * sum(θ)
-        return l
-    end
+    # Relative error
+    norm(sol - v) / norm(v)
+end
 
-    function val_loss(θ, x, u, t)
-        xₙ = size(u, 1)
-        x = Φ' * x
+function train_derivative_fit(
+    f,
+    dvdt,
+    v,
+    p₀;
+    maxiters = 100,
+    optimizer = OptimizationOptimisers.Adam(0.001),
+    solver = Tsit5(),
+    callback = p -> false,
+    λ = 1e-8,
+    nsample = size(v, 2),
+)
+    func = OptimizationFunction(
+        (p, _) -> loss_derivative_fit(f, p, dvdt, v, λ; nsample),
+        Optimization.AutoZygote(),
+    )
+    problem = OptimizationProblem(func, p₀, nothing)
+    sol = solve(problem, optimizer; maxiters, callback)
+    sol.u
+end
 
-        # x = reshape(x, size(x, 1), 1, :); # CNN
-        v̂ = predict_neural_ode(θ, x, t[:, 1])
-
-        u = reshape(u, xₙ, :)
-        v = Φ' * u
-        v = reshape(v, size(v̂, 1), size(v̂, 2), :)
-
-        lt = Flux.mse(v̂, v)
-        return lt
-    end
-
-    function cb(θ, l)
-        # @show(l)
-        count += 1
-
-        # iter = (train_loader.nobs / train_loader.batchsize)
-        iter = 8
-        if (count % iter == 0)
-            ep += 1
-            count = 0
-            loss = 0
-
-            for (x, y, t) in val_loader
-                loss += val_loss(θ, x, y, t)
-            end
-            # loss /= (val_loader.nobs / val_loader.batchsize)
-
-            @info("Epoch ", ep, loss)
-            push!(losses, loss)
-            # Plots.plot!(pl, LinRange(1, epochs, 1), val_loss);
-            # display(pl)
-
+function create_callback(f, v, t; ncallback = 1, solver = Tsit5(), kwargs...)
+    i = 0
+    iters = Int[]
+    errors = zeros(0)
+    function callback(p, loss)
+        i += 1
+        if i % ncallback == 0
+            e = relative_error(f, p, v, t, solver; kwargs...)
+            push!(iters, i)
+            push!(errors, e)
+            println("Epoch $i\trelative error $e")
+            display(plot(iters, errors; xlabel = "Iterations", title = "Relative error"))
         end
         return false
     end
-
-    @info("Initiate training")
-    optf = OptimizationFunction(
-        # (θ, p, x, y, t) -> loss_trajectory_fit(θ, x, y, t),
-        (θ, p, x, y, t) -> loss_derivative_fit(θ, x, y, t),
-        Optimization.AutoZygote(),
-    )
-    optprob = Optimization.OptimizationProblem(optf, p)
-    result_neuralode =
-        Optimization.solve(optprob, opt, ncycle(train_loader, epochs); callback = cb)
-
-    return re(result_neuralode), Array(result_neuralode)
 end
 
 dataset = Generator.read_dataset(
@@ -178,31 +174,21 @@ dataset = Generator.read_dataset(
 )["training_set"];
 Φ_dataset, train_dataset = dataset[1:128], dataset[129:end];
 
-epochs = 10;
-ratio = 0.75; # 0.75
-batch_size = 8;
-lr = 1e-3;
-reg = 1e-7;
-noise = 0.05;
-tₘₐₓ = 1.0; # 2.
-tₘᵢₙ = 0.0;
+maxiters = 10;
+λ = 1e-7;
 xₘₐₓ = 1.0; # pi
 xₘᵢₙ = 0;
-tₙ = 64;
 xₙ = 64;
 ν = 0.001; # 0.04
 Δx = (xₘₐₓ - xₘᵢₙ) / (xₙ - 1)
 solver = Tsit5();
 x = LinRange(xₘᵢₙ, xₘₐₓ, xₙ);
-t = LinRange(tₘᵢₙ, tₘₐₓ, tₙ);
 m = 10;
-snap_kwargs = (; ν, Δx, reg);
 
 # === Get basis Φ ===
 Φ = get_Φ(Φ_dataset, m);
 
 # === Train ===
-opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999));
 # model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
 model = Flux.Chain(
     v -> vcat(v, v .^ 2),
@@ -213,25 +199,54 @@ model = Flux.Chain(
 model.layers[2].weight
 model.layers[2].bias
 
-K, θ = training(
-    model,
-    epochs,
-    train_dataset,
-    opt,
-    batch_size,
-    ratio,
-    noise,
-    solver,
-    snap_kwargs,
+@info("Building model")
+p₀, re = Flux.destructure(model)
+fᵣₒₘ(v, p, t) = re(p)(v)
+
+function f_closure(v, p, t)
+    Φ' * f(Φ * v, (ν, Δx), t) + fᵣₒₘ(v, p, t)
+end
+
+# Assume that all times are the same
+@assert all(d -> d[1] == train_dataset[1][1], train_dataset)
+t_train = train_dataset[1][1]
+u_train = reduce(hcat, (reshape(d[2], xₙ, 1, :) for d ∈ train_dataset))
+dudt_train = f(u_train, (ν, Δx), 0)
+
+"""
+    tensormul(A, x)
+
+Multiply `A` of size `(ny, nx)` with each column of tensor `x` of size `(nx, d1, ..., dn)`.
+Return `y = A * x` of size `(ny, d1, ..., dn)`.
+"""
+function tensormul(A, x)
+    s = size(x)
+    x = reshape(x, s[1], :)
+    y = A * x
+    reshape(y, size(y, 1), s[2:end]...)
+end
+
+# Reference coefficients
+v_train = tensormul(Φ', u_train)
+dvdt_train = tensormul(Φ', dudt_train)
+
+predict(f_closure, v_train[:, :, 1], p₀, t_train, Tsit5())
+create_callback(f_closure, v_train[:, 1:20, :], t_train; reltol = 1e-4, abstol = 1e-6)(p₀, nothing)
+
+p = train_derivative_fit(
+    f_closure,
+    reshape(dvdt_train, m, :),
+    reshape(v_train, m, :),
+    p₀;
+    maxiters = 1000,
+    callback = create_callback(f_closure, v_train[:, 1:20, :], t_train; ncallback = 100, reltol = 1e-4, abstol = 1e-6),
+    λ = 1e-8,
+    nsample = 100,
 );
-# @save "./models/fnn_3layers_viscous_burgers_high_dim_t2_64_xpi_64_nu0.04_typ2_m10_256_up16_j173.bson" K θ
+# @save "./models/fnn_3layers_viscous_burgers_high_dim_t2_64_xpi_64_nu0.04_typ2_m10_256_up16_j173.bson" p
 
 
 # === Check results ===
-
-function f_closure(v, p, t)
-    Φ' * f(Φ * v, (ν, Δx), t) + K(v)
-end
 
 t, u, _, _ = train_dataset[2];
 v₀ = Φ' * u[:, 1];
