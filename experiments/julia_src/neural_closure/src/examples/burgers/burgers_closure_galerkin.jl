@@ -73,9 +73,9 @@ function loss_trajectory_fit(
     f,
     p,
     v,
-    t,
-    solver,
-    λ = 1e-8;
+    t;
+    solver = Tsit5(),
+    λ = 1e-8,
     nsolution = size(v, 2),
     ntime = size(v, 3),
     kwargs...,
@@ -84,6 +84,7 @@ function loss_trajectory_fit(
     is = Zygote.@ignore sort(shuffle(1:size(v, 2))[1:nsolution])
     it = Zygote.@ignore sort(shuffle(1:length(t))[1:ntime])
     v = v[:, is, it]
+    t = t[it]
 
     # Predicted soluton
     sol = predict(f, v[:, :, 1], p, t, solver; kwargs...)
@@ -104,7 +105,7 @@ end
 Compute derivative-fitting loss.
 Selects a random subset of samples at each evaluation.
 """
-function loss_derivative_fit(f, p, dvdt, v, λ; nsample = size(v, 2))
+function loss_derivative_fit(f, p, dvdt, v; λ = 1e-8, nsample = size(v, 2))
     # Select a random subset (batch)
     i = Zygote.@ignore sort(shuffle(1:size(v, 2))[1:nsample])
     v = v[:, i]
@@ -131,22 +132,14 @@ function relative_error(f, p, v, t, solver; kwargs...)
     norm(sol - v) / norm(v)
 end
 
-function train_derivative_fit(
-    f,
-    dvdt,
-    v,
+function train(
+    loss,
     p₀;
     maxiters = 100,
     optimizer = OptimizationOptimisers.Adam(0.001),
-    solver = Tsit5(),
     callback = p -> false,
-    λ = 1e-8,
-    nsample = size(v, 2),
 )
-    func = OptimizationFunction(
-        (p, _) -> loss_derivative_fit(f, p, dvdt, v, λ; nsample),
-        Optimization.AutoZygote(),
-    )
+    func = OptimizationFunction(loss, Optimization.AutoZygote())
     problem = OptimizationProblem(func, p₀, nothing)
     sol = solve(problem, optimizer; maxiters, callback)
     sol.u
@@ -174,19 +167,18 @@ dataset = Generator.read_dataset(
 )["training_set"];
 Φ_dataset, train_dataset = dataset[1:128], dataset[129:end];
 
-maxiters = 10;
-λ = 1e-7;
 xₘₐₓ = 1.0; # pi
 xₘᵢₙ = 0;
 xₙ = 64;
 ν = 0.001; # 0.04
 Δx = (xₘₐₓ - xₘᵢₙ) / (xₙ - 1)
-solver = Tsit5();
 x = LinRange(xₘᵢₙ, xₘₐₓ, xₙ);
 m = 10;
 
 # === Get basis Φ ===
 Φ = get_Φ(Φ_dataset, m);
+
+g(v, p, t) = Φ' * f(Φ * v, (ν, Δx), t)
 
 # === Train ===
 # model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
@@ -196,15 +188,13 @@ model = Flux.Chain(
     Flux.Dense(2m => m, tanh; init = Models.glorot_uniform_float64, bias = true),
     Flux.Dense(m => m, identity; init = Models.glorot_uniform_float64, bias = true),
 )
-model.layers[2].weight
-model.layers[2].bias
 
 @info("Building model")
 p₀, re = Flux.destructure(model)
 fᵣₒₘ(v, p, t) = re(p)(v)
 
 function f_closure(v, p, t)
-    Φ' * f(Φ * v, (ν, Δx), t) + fᵣₒₘ(v, p, t)
+    g(v, nothing, t) + fᵣₒₘ(v, p, t)
 end
 
 # Assume that all times are the same
@@ -230,49 +220,90 @@ end
 v_train = tensormul(Φ', u_train)
 dvdt_train = tensormul(Φ', dudt_train)
 
-predict(f_closure, v_train[:, :, 1], p₀, t_train, Tsit5())
-create_callback(f_closure, v_train[:, 1:20, :], t_train; reltol = 1e-4, abstol = 1e-6)(p₀, nothing)
-
-p = train_derivative_fit(
+loss_df(p, _) = loss_derivative_fit(
     f_closure,
+    p,
     reshape(dvdt_train, m, :),
-    reshape(v_train, m, :),
-    p₀;
-    maxiters = 1000,
-    callback = create_callback(f_closure, v_train[:, 1:20, :], t_train; ncallback = 100, reltol = 1e-4, abstol = 1e-6),
-    λ = 1e-8,
+    reshape(v_train, m, :);
     nsample = 100,
+)
+
+p_df = train(
+    loss_df,
+    p₀;
+    maxiters = 5000,
+    callback = create_callback(
+        f_closure,
+        v_train[:, 1:20, :],
+        t_train;
+        ncallback = 100,
+        reltol = 1e-4,
+        abstol = 1e-6,
+    ),
 );
-# @save "./models/fnn_3layers_viscous_burgers_high_dim_t2_64_xpi_64_nu0.04_typ2_m10_256_up16_j173.bson" p
+
+loss_tf(p, _) = loss_trajectory_fit(
+    f_closure,
+    p,
+    v_train,
+    t_train;
+    nsolution = 10,
+    ntime = 20,
+    reltol = 1e-4,
+    abstol = 1e-6,
+)
+
+p_tf = train(
+    loss_tf,
+    p₀;
+    maxiters = 100,
+    callback = create_callback(
+        f_closure,
+        v_train[:, 1:20, :],
+        t_train;
+        ncallback = 10,
+        reltol = 1e-4,
+        abstol = 1e-6,
+    ),
+);
 
 
 # === Check results ===
 
-t, u, _, _ = train_dataset[2];
-v₀ = Φ' * u[:, 1];
-û = galerkin_projection(t, u, Φ, ν, Δx, Δt);
-û_prob = ODEProblem((v, p, t) -> (Φ' * f(Φ * v, p, t)), v₀, extrema(t), (ν, Δx));
-solve(
-    û_prob,
-    solver;
-    saveat = t,
-    sensealg = InterpolatingAdjoint(; autojacvec = ZygoteVJP()),
+sol_nomodel =
+    predict(g, v_train[:, :, 1], nothing, t_train, Tsit5(); reltol = 1e-4, abstol = 1e-6)
+sol_df = predict(
+    f_closure,
+    v_train[:, :, 1],
+    p_df,
+    t_train,
+    Tsit5();
+    reltol = 1e-4,
+    abstol = 1e-6,
 )
-ū = Φ * Array(sol);
-uₙₙ_prob = ODEProblem((v, p, t) -> K(v), v₀, extrema(t), θ; saveat = t);
-reshape(v₀, (size(v₀, 1), :));
-uₙₙ = Φ * Array(solve(uₙₙ_prob, Tsit5()));
-uᵧₙₙ_prob = ODEProblem(f_closure, v₀, extrema(t), θ; saveat = t);
-uᵧₙₙ = Φ * Array(solve(uᵧₙₙ_prob, Tsit5()));
-for (i, t) ∈ enumerate(t)
-    pl = Plots.plot(; xlabel = "x", ylim = extrema(u))
-    Plots.plot!(pl, x, u[:, i]; label = "FOM - Model 0")
-    # Plots.plot!(pl, x, û[:, i]; label = "ROM - Model 1.0 GP")
-    Plots.plot!(pl, x, ū[:, i]; label = "ROM - Model 1.5 Φ'f(Φv)")
-    # Plots.plot!(pl, x, uₙₙ[:, i]; label = "ROM - Model 2 NN")
-    Plots.plot!(pl, x, uᵧₙₙ[:, i]; label = "ROM - Model 3  Φ'f(Φv) + NN(v)")
-    # Plots.plot!(pl, x, uₙₙ[:, i]; label = "ROM - Model 4 GP + NN")
+sol_tf = predict(
+    f_closure,
+    v_train[:, :, 1],
+    p_tf,
+    t_train,
+    Tsit5();
+    reltol = 1e-4,
+    abstol = 1e-6,
+)
+
+iplot = 1
+for (i, t) ∈ enumerate(t_train)
+    pl = Plots.plot(;
+        title = @sprintf("Solution, t = %.3f", t),
+        xlabel = "x",
+        ylim = extrema(v_train[:, iplot, :]),
+    )
+    plot!(pl, x, Φ * v_train[:, iplot, i]; label = "Projected FOM")
+    plot!(pl, x, Φ * sol_nomodel[:, iplot, i]; label = "ROM no closure")
+    plot!(pl, x, Φ * sol_df[:, iplot, i]; label = "ROM neural closure (DF)")
+    plot!(pl, x, Φ * sol_tf[:, iplot, i]; label = "ROM neural closure (TF)")
     display(pl)
+    sleep(0.05)
 end
 
 
