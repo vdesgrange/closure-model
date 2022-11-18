@@ -91,8 +91,8 @@ function generate_kdv_dataset(
     for i in range(1, n, step=1)
       print("Generating snapshot ", i, "...")
   
-      tₕ, u = kdv_snapshot_generator(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ * upscale, typ, init_kwargs); # tₙ * upscale
-      û = ProcessingTools.downsampling_x(u, upscale);
+      tₕ, u = kdv_snapshot_generator(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ * upscale, typ, init_kwargs); # (tₙ), (upscale * xₙ,tₙ)
+      û = ProcessingTools.downsampling_x(u, upscale); # (xₙ, tₙ)
 
       item = [tₕ, û, snap_kwargs, init_kwargs]
       push!(train_set, item);

@@ -2,6 +2,7 @@ module Objectives
 
 using Flux
 using Statistics
+using LinearAlgebra
 
 function _check_sizes(ŷ, y)
   @assert size(y) == size(ŷ)
@@ -12,6 +13,16 @@ function mser(ŷ, y)
   t_n = size(y)[2]
   r = collect(LinRange(0.1, 1., t_n))
   mean(abs2, r.*(ŷ .- y) .^ 2)
+end
+
+function rmse(ŷ, y)
+  _check_sizes(ŷ, y)
+  sqrt(mean(abs2, (ŷ .- y).^2))
+end
+
+function nre(ŷ, y)
+  _check_sizes(ŷ, y)
+  norm(ŷ .- y) / norm(y)
 end
 
 function Δ_loss(K, ŷ, y, Δt)

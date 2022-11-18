@@ -29,7 +29,7 @@ m = 4
 
 Inviscid burgers dataset using high dim gaussian conditions (multiple wave with shock)
 ```
-inviscid_burgers_high_dim_m10_256_j173.jld2
+inviscid_burgers_high_dim_m10_t2_256_j173.jld2
 Julia 1.7.3
 256
 t in [0., 2.]
@@ -93,25 +93,5 @@ t_n, x_n = 64, 64
 upscale = 64
 initial conditions - advecting shock
 nu = 0.001
-```
-
-```
-high_dim_1k_set_j173.jld2
-Julia 1.7.3
-1024
-t in [0., 1.]
-x in [0., pi]
-t_n, x_n = 64, 64
-nu = 0.04
-```
-
-```
-high_dim_256_set_j173.jld2
-Julia 1.7.3
-256
-t in [0., 1.]
-x in [0., pi]
-t_n, x_n = 64, 64
-nu = 0.04
 ```
 

@@ -15,21 +15,21 @@ include("../../utils/processing_tools.jl")
 include("../../neural_ode/models.jl")
 include("../../neural_ode/regularization.jl")
 
-tₘₐₓ= 1.;
+tₘₐₓ= 0.5;
 tₘᵢₙ = 0.;
 xₘₐₓ = 1.;
 xₘᵢₙ = 0;
-tₙ = 64;
+tₙ = 128;
 xₙ = 64;
 ν = 0.001;
 x = LinRange(xₘᵢₙ, xₘₐₓ, xₙ);
 t = LinRange(tₘᵢₙ, tₘₐₓ, tₙ);
 Δx = (xₘₐₓ / (xₙ - 1));
 Δt = (tₘₐₓ / (tₙ - 1));
-m = 50;
+m = 100;
 snap_kwarg= repeat([(; tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, ν, typ=5)], 256);
 init_kwarg = repeat([(; mu=100)], 256);
-dataset = Generator.generate_closure_dataset(256, 2, "./dataset/viscous_burgers_high_dim_t1_64_x1_64_nu0.001_typ2_m100_256_up2_j173.jld2", snap_kwarg, init_kwarg);
+dataset = Generator.generate_closure_dataset(256, 4, "./viscous_burgers_high_dim_t0.5_128_x1_64_nu0.001_typ2_m100_8_up2_j173.jld2", snap_kwarg, init_kwarg);
 for (i, data) in enumerate(dataset)
   t, u, _, _ = data;
   display(Plots.plot(x, u[:, 1]; label = "u₀"));
@@ -169,3 +169,9 @@ for (i, t) ∈ enumerate(t)
   display(pl)
 end
 
+t, u₀, u = Generator.get_burgers_batch(2., 0., pi, 0., 64, 64, 0.04, 2, (; m=5));
+hcat([u₀, u₀]...)
+_prob = ODEProblem(f, hcat([u₀, u₀]...), extrema(t), (ν,  Δx); saveat=t);
+u = solve(_prob, Tsit5());
+size(u)
+display(GraphicTools.show_state(u[:, 1, :], t, x, "", "t", "x"))

@@ -78,7 +78,8 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     v = Φ' * u; 
     v = reshape(v, mₙ, tₙ, :);
 
-    l = Flux.mse(v̂, v) + reg * sum(θ);
+    # l = Flux.mse(v̂, v) + reg * sum(θ);
+    l = Objectives.rmse(v̂, v) + reg * sum(θ);
     return l;
   end
 
@@ -94,9 +95,10 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
     # v = reshape(v, mₙ, 1, :) # CNN
     dv̂ = f_closure(v, θ, t);
     # dv̂ = fᵣₒₘ(v, θ, t);
-   #  dv̂ = reshape(dv̂, mₙ, tₙ, bₙ)  # CNN
+    # dv̂ = reshape(dv̂, mₙ, tₙ, bₙ)  # CNN
 
-    l = Flux.mse(dv̂, dv) + reg * sum(θ);
+    # l = Flux.mse(dv̂, dv) + reg * sum(θ);
+    l = Objectives.rmse(dv̂, dv) + reg * sum(θ);
     return l
   end
 
@@ -111,7 +113,8 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
       v = Φ' * u; 
       v = reshape(v, size(v̂, 1), size(v̂, 2), :);
 
-      lt = Flux.mse(v̂, v);
+      # lt = Flux.mse(v̂, v);
+      lt = Objectives.rmse(v̂, v);
       return lt;
   end
 
@@ -149,9 +152,8 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
 end
 
 # === Script ===
-using Plots;
-# begin
-  dataset = Generator.read_dataset("./dataset/viscous_burgers_high_dim_t1_64_x1_64_nu0.001_typ2_m100_256_up2_j173.jld2")["training_set"];
+begin
+  dataset = Generator.read_dataset("./dataset/viscous_burgers_high_dim_t0.5_128_x1_64_nu0.001_typ2_m100_8_up2_j173.jld2")["training_set"];
   Φ_dataset, train_dataset = dataset[1:128], dataset[129:end];
 
   epochs = 100;
@@ -160,18 +162,19 @@ using Plots;
   lr = 1e-3;
   reg = 1e-7;
   noise = 0.05;
-  tₘₐₓ= 1.; # 2.
+  tₘₐₓ= 0.5; # 2.
   tₘᵢₙ = 0.;
   xₘₐₓ = 1.; # pi
   xₘᵢₙ = 0;
-  tₙ = 64;
+  tₙ = 128;
   xₙ = 64;
   ν = 0.001; # 0.04
   Δx = (xₘₐₓ - xₘᵢₙ) / (xₙ - 1);
+  Δt = (tₘₐₓ - tₘᵢₙ) / (tₙ - 1);
   sol = Tsit5();
   x = LinRange(xₘᵢₙ, xₘₐₓ, xₙ);
   t = LinRange(tₘᵢₙ, tₘₐₓ, tₙ);
-  m = 3;
+  m = 10;
   snap_kwargs = (; ν, Δx, reg);
  
   # === Get basis Φ ===
@@ -183,68 +186,59 @@ using Plots;
   model = Flux.Chain(
     v -> vcat(v, v.^2),
     Flux.Dense(2m => 2m, tanh; init=Flux.glorot_uniform, bias=true),
-    Flux.Dense(2m => m, tanh; init=Flux.glorot_uniform, bias=true),
-    Flux.Dense(m => m, identity; init=Flux.glorot_uniform, bias=true),
-  );
+    Flux.Dense(2m => 2m, tanh; init=Flux.glorot_uniform, bias=true),
+    Flux.Dense(2m => m, identity; init=Flux.glorot_uniform, bias=true),
+  )
 
   K, θ = training(model, epochs, train_dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);
   # @save "./models/fnn_3layers_viscous_burgers_high_dim_t2_64_xpi_64_nu0.04_typ2_m10_256_up16_j173.bson" K θ
 
-# end
+end
 
-  # === Check results ===
+# === Check results ===
+begin
   using Plots
+  using PyPlot
   include("../../utils/graphic_tools.jl")
-
+  include("../../neural_ode/objectives.jl")
+  
   function f_closure(v, p, t)
     Φ' * f(Φ * v, (ν, Δx), t) + K(v);
   end
 
-  t, u, _, _ = train_dataset[2];
+  t, u₀, u = Generator.get_burgers_batch(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, ν, 2, (; m));
+  #t, u, _, _ = train_dataset[2];
   v₀ =  Φ' * u[:, 1];
-  û = galerkin_projection(t, u, Φ, ν, Δx, Δt);
+
+  @time û = galerkin_projection(t, u, Φ, ν, Δx, Δt);
   û_prob = ODEProblem((v, p, t) ->  (Φ' * f(Φ * v, p, t)), v₀, extrema(t), (ν, Δx), saveat=t);
-  ū = Φ * Array(solve(û_prob, sol, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
-  uₙₙ_prob = ODEProblem((v, p, t) -> K(v), v₀, extrema(t), θ; saveat=t); reshape(v₀, (size(v₀, 1), :));
+  @time ū = Φ * Array(solve(û_prob, sol, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
+  uₙₙ_prob = ODEProblem((v, p, t) -> K2(v), v₀, extrema(t), θ2; saveat=t); reshape(v₀, (size(v₀, 1), :));
   uₙₙ = Φ * Array(solve(uₙₙ_prob, Tsit5()));
   uᵧₙₙ_prob = ODEProblem(f_closure, v₀, extrema(t), θ; saveat=t);
   uᵧₙₙ = Φ * Array(solve(uᵧₙₙ_prob, Tsit5()));
   for (i, t) ∈ enumerate(t)
     pl = Plots.plot(; xlabel = "x", ylim=extrema(u))
     Plots.plot!(pl, x, u[:, i]; label = "FOM - Model 0")
-    # Plots.plot!(pl, x, û[:, i]; label = "ROM - Model 1.0 GP")
+    Plots.plot!(pl, x, Φ * Φ' * u[:, i]; label = "FOM - Model 0.5 - ΦΦ'u")
+    Plots.plot!(pl, x, û[:, i]; label = "ROM - Model 1.0 GP")
     Plots.plot!(pl, x, ū[:, i]; label = "ROM - Model 1.5 Φ'f(Φv)")
-    # Plots.plot!(pl, x, uₙₙ[:, i]; label = "ROM - Model 2 NN")
+    Plots.plot!(pl, x, uₙₙ[:, i]; label = "ROM - Model 2 NN")
     Plots.plot!(pl, x, uᵧₙₙ[:, i]; label = "ROM - Model 3  Φ'f(Φv) + NN(v)")
     # Plots.plot!(pl, x, uₙₙ[:, i]; label = "ROM - Model 4 GP + NN")
     display(pl)
+    # sleep(0.02)
   end
-  
 
-  # t, u₀, u = Generator.get_burgers_batch(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, ν, 2, (; m=10));
-  # v = Φ' * u;
-  # v₀ = v[:, 1];
-  # û = galerkin_projection(t, u, Φ, ν, Δx, Δt);
+  display(GraphicTools.show_state(u, t, x, "", "t", "x"))
+  display(GraphicTools.show_state(Φ * Φ' * u, t, x, "", "t", "x"))
+  display(GraphicTools.show_state(ū, t, x, "", "t", "x"))
+  display(GraphicTools.show_state(uᵧₙₙ, t, x, "", "t", "x"))
 
-  # _prob = ODEProblem((u, p, t) -> K(u), reshape(v₀, :, 1, 1), extrema(t), θ; saveat=t);
-  # v̄ = solve(_prob, Tsit5());
+  display(GraphicTools.show_err(Φ * Φ' * u, ū, t, x, "", "t", "x"))
+  display(GraphicTools.show_err(Φ * Φ' * u, uᵧₙₙ, t, x, "", "t", "x"))
+  display(GraphicTools.show_err(Φ * Φ' * u, uₙₙ, t, x, "", "t", "x"))
 
-  # # display(GraphicTools.show_state(Φ * v, t, x, "", "t", "x"))
-  # # display(GraphicTools.show_state(Φ * v̄[:, 1, 1, :], t, x, "", "t", "x"))
-  # # display(GraphicTools.show_state(Φ * v̂, t, x, "", "t", "x"))
-
-  # for (i, t) ∈ enumerate(t)
-  #   pl = Plots.plot(; xlabel = "x", ylim=extrema(v))
-  #   Plots.plot!(pl, x, v[:, i]; label = "FOM - v - Model 0")
-  #   # Plots.plot!(pl, x, v̂[:, i]; label = "ROM - v̂ - Model 1")
-  #   Plots.plot!(pl, x, v̄[:, 1, 1, i]; label = "ROM - v̄ - Model 2")
-  #   display(pl)
-  # end
-
-  # for (i, t) ∈ enumerate(t)
-  #   pl = Plots.plot(; xlabel = "x", ylim=extrema(v))
-  #   Plots.plot!(pl, x, u[:, i]; label = "FOM - Model 0")
-  #   Plots.plot!(pl, x, û[:, i]; label = "ROM - Model 1")
-  #   Plots.plot!(pl, x, Φ * v̄[:, 1, 1, i]; label = "ROM - Model 2")
-  #   display(pl)
-  # end
+  Objectives.nre(ū, (Φ * Φ' * u))
+  Objectives.nre(uᵧₙₙ, (Φ * Φ' * u))
+end
