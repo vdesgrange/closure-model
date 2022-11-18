@@ -202,10 +202,12 @@ opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999));
 # model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
 model = Flux.Chain(
     v -> vcat(v, v .^ 2),
-    Flux.Dense(2m => 2m, tanh; init = Flux.glorot_uniform, bias = true),
-    Flux.Dense(2m => m, tanh; init = Flux.glorot_uniform, bias = true),
-    Flux.Dense(m => m, identity; init = Flux.glorot_uniform, bias = true),
-);
+    Flux.Dense(2m => 2m, tanh; init = Models.glorot_uniform_float64, bias = true),
+    Flux.Dense(2m => m, tanh; init = Models.glorot_uniform_float64, bias = true),
+    Flux.Dense(m => m, identity; init = Models.glorot_uniform_float64, bias = true),
+)
+model.layers[2].weight
+model.layers[2].bias
 
 K, θ =
     training(model, epochs, train_dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);
