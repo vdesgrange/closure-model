@@ -51,7 +51,7 @@ function training(
     batch_size,
     ratio,
     noise = 0.0,
-    sol = Tsit5(),
+    solver = Tsit5(),
     kwargs = (;),
 )
     ep = 0
@@ -72,11 +72,16 @@ function training(
     end
 
     function predict_neural_ode(θ, x, t)
-        _prob = ODEProblem(f_closure, x, extrema(t), θ; saveat = t)
-        # _prob = ODEProblem(fᵣₒₘ, x, extrema(t), θ, saveat=t);
-        ȳ = Array(
-            solve(_prob, sol; sensealg = InterpolatingAdjoint(; autojacvec = ZygoteVJP())),
-        )
+        prob = ODEProblem(f_closure, x, extrema(t), θ)
+        # prob = ODEProblem(fᵣₒₘ, x, extrema(t), θ, saveat=t);
+        sol =
+            solve(
+                prob,
+                solver;
+                saveat = t,
+                sensealg = InterpolatingAdjoint(; autojacvec = ZygoteVJP()),
+            ),
+            ȳ = Array(solver)
         return permutedims(del_dim(ȳ), (1, 3, 2))
     end
 
@@ -108,7 +113,7 @@ function training(
         # v = reshape(v, mₙ, 1, :) # CNN
         dv̂ = f_closure(v, θ, t)
         # dv̂ = fᵣₒₘ(v, θ, t);
-        #  dv̂ = reshape(dv̂, mₙ, tₙ, bₙ)  # CNN
+        # dv̂ = reshape(dv̂, mₙ, tₙ, bₙ)  # CNN
 
         l = Flux.mse(dv̂, dv) + reg * sum(θ)
         return l
@@ -188,7 +193,7 @@ tₙ = 64;
 xₙ = 64;
 ν = 0.001; # 0.04
 Δx = (xₘₐₓ - xₘᵢₙ) / (xₙ - 1)
-sol = Tsit5();
+solver = Tsit5();
 x = LinRange(xₘᵢₙ, xₘₐₓ, xₙ);
 t = LinRange(tₘᵢₙ, tₘₐₓ, tₙ);
 m = 3;
@@ -209,8 +214,17 @@ model = Flux.Chain(
 model.layers[2].weight
 model.layers[2].bias
 
-K, θ =
-    training(model, epochs, train_dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);
+K, θ = training(
+    model,
+    epochs,
+    train_dataset,
+    opt,
+    batch_size,
+    ratio,
+    noise,
+    solver,
+    snap_kwargs,
+);
 # @save "./models/fnn_3layers_viscous_burgers_high_dim_t2_64_xpi_64_nu0.04_typ2_m10_256_up16_j173.bson" K θ
 
 # end
@@ -226,11 +240,14 @@ end
 t, u, _, _ = train_dataset[2];
 v₀ = Φ' * u[:, 1];
 û = galerkin_projection(t, u, Φ, ν, Δx, Δt);
-û_prob =
-    ODEProblem((v, p, t) -> (Φ' * f(Φ * v, p, t)), v₀, extrema(t), (ν, Δx); saveat = t);
-ū =
-    Φ *
-    Array(solve(û_prob, sol; sensealg = InterpolatingAdjoint(; autojacvec = ZygoteVJP())));
+û_prob = ODEProblem((v, p, t) -> (Φ' * f(Φ * v, p, t)), v₀, extrema(t), (ν, Δx));
+solve(
+    û_prob,
+    solver;
+    saveat = t,
+    sensealg = InterpolatingAdjoint(; autojacvec = ZygoteVJP()),
+)
+ū = Φ * Array(sol);
 uₙₙ_prob = ODEProblem((v, p, t) -> K(v), v₀, extrema(t), θ; saveat = t);
 reshape(v₀, (size(v₀, 1), :));
 uₙₙ = Φ * Array(solve(uₙₙ_prob, Tsit5()));
