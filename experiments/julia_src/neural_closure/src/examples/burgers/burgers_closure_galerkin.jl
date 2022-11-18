@@ -4,6 +4,7 @@ using IterTools: ncycle
 using LinearAlgebra
 using Optimization
 using OptimizationOptimisers
+using OrdinaryDiffEq
 using Plots
 using Printf
 using Random
@@ -18,32 +19,9 @@ include("../../utils/graphic_tools.jl")
 include("../../equations/burgers/burgers_gp.jl")
 include("../../rom/pod.jl")
 
-function f(u, p, t)
-    ν = p[1]
-    Δx = p[2]
-    u₋ = circshift(u, 1)
-    u₊ = circshift(u, -1)
-    a₊ = u₊ + u
-    a₋ = u + u₋
-    du = @. -((a₊ < 0) * u₊^2 + (a₊ > 0) * u^2 - (a₋ < 0) * u^2 - (a₋ > 0) * u₋^2) / Δx +
-       ν * (u₋ - 2u + u₊) / Δx^2
-    du
-end
-
-function get_Φ(dataset, m)
-    tmp = []
-    for (i, data) in enumerate(dataset)
-        push!(tmp, data[2])
-    end
-    u_cat = Array(cat(tmp...; dims = 3))
-    xₙ = size(u_cat, 1)
-    bas, _ = POD.generate_pod_svd_basis(reshape(u_cat, xₙ, :), false)
-    λ = bas.eigenvalues
-    @show POD.get_energy(λ, m)
-
-    Φ = bas.modes[:, 1:m]
-
-    return Φ
+function get_Φ(u, m)
+    U, S, V = svd(u)
+    Φ = U[:, 1:m]
 end
 
 """
@@ -162,46 +140,45 @@ function create_callback(f, v, t; ncallback = 1, solver = Tsit5(), kwargs...)
     end
 end
 
-dataset = Generator.read_dataset(
-    "./dataset/viscous_burgers_high_dim_t1_64_x1_64_nu0.001_typ2_m100_256_up2_j173.jld2",
-)["training_set"];
-Φ_dataset, train_dataset = dataset[1:128], dataset[129:end];
+"""
+    create_data(f, p, K, x, nsolution, t; decay = k -> 1 / (1 + abs(k)), kwargs...)
 
-xₘₐₓ = 1.0; # pi
-xₘᵢₙ = 0;
-xₙ = 64;
-ν = 0.001; # 0.04
-Δx = (xₘₐₓ - xₘᵢₙ) / (xₙ - 1)
-x = LinRange(xₘᵢₙ, xₘₐₓ, xₙ);
-m = 10;
+Args:
 
-# === Get basis Φ ===
-Φ = get_Φ(Φ_dataset, m);
+- Right hand side `f(u, p, t)`
+- Parameters `p`
+- Maximum frequency in initial conditions `K`
+- Spatial points `x = LinRange(0, L, N + 1)[2:end]`
+- Number of different initial conditions `nsolution`
+- Time points to save `t = LinRange(0, T, ntime)`
 
-g(v, p, t) = Φ' * f(Φ * v, (ν, Δx), t)
+Kwargs:
 
-# === Train ===
-# model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
-model = Flux.Chain(
-    v -> vcat(v, v .^ 2),
-    Flux.Dense(2m => 2m, tanh; init = Models.glorot_uniform_float64, bias = true),
-    Flux.Dense(2m => m, tanh; init = Models.glorot_uniform_float64, bias = true),
-    Flux.Dense(m => m, identity; init = Models.glorot_uniform_float64, bias = true),
-)
+- Frequency decay function (for initial conditions) `decay(k)`
+- Other kwargs: Pass to ODE solver (e.g. `reltol = 1e-4`, `abstol = 1e-6`)
 
-@info("Building model")
-p₀, re = Flux.destructure(model)
-fᵣₒₘ(v, p, t) = re(p)(v)
+Returns:
 
-function f_closure(v, p, t)
-    g(v, nothing, t) + fᵣₒₘ(v, p, t)
+- Solution `u` of size `(nx, nsolution, ntime)`
+
+To get initial conditions, do `u₀ = u[:, :, 1]`.
+"""
+function create_data(f, p, K, x, nsolution, t; decay = k -> 1 / (1 + abs(k)), kwargs...)
+    # Domain length (assume x = LinRange(0, L, N + 1)[2:end]) for some `L` and `N`)
+    L = x[end]
+
+    # Fourier basis
+    basis = [exp(2π * im * k * x / L) for x ∈ x, k ∈ -K:K]
+
+    # Fourier coefficients with random phase and amplitude
+    c = [randn() * decay(k) * exp(-2π * im * rand()) for k ∈ -K:K, _ ∈ 1:nsolution]
+
+    # Random initial conditions (real-valued)
+    u₀ = real.(basis * c)
+
+    # Solve ODE
+    predict(f, u₀, p, t, Tsit5(); kwargs...)
 end
-
-# Assume that all times are the same
-@assert all(d -> d[1] == train_dataset[1][1], train_dataset)
-t_train = train_dataset[1][1]
-u_train = reduce(hcat, (reshape(d[2], xₙ, 1, :) for d ∈ train_dataset))
-dudt_train = f(u_train, (ν, Δx), 0)
 
 """
     tensormul(A, x)
@@ -216,10 +193,83 @@ function tensormul(A, x)
     reshape(y, size(y, 1), s[2:end]...)
 end
 
-# Reference coefficients
-v_train = tensormul(Φ', u_train)
-dvdt_train = tensormul(Φ', dudt_train)
+function f(u, (ν, Δx), t)
+    u₋ = circshift(u, 1)
+    u₊ = circshift(u, -1)
+    a₊ = u₊ + u
+    a₋ = u + u₋
+    du = @. -((a₊ < 0) * u₊^2 + (a₊ > 0) * u^2 - (a₋ < 0) * u^2 - (a₋ > 0) * u₋^2) / Δx +
+       ν * (u₋ - 2u + u₊) / Δx^2
+    du
+end
 
+# Viscosity
+ν = 0.001;
+
+# FOM discretization
+N = 200
+x = LinRange(0.0, 1.0, N + 1)[2:end]
+Δx = 1 / N
+
+# Training times
+t_pod = LinRange(0.0, 0.5, 60)
+t_train = LinRange(0.0, 0.1, 60)
+t_valid = LinRange(0.0, 0.5, 10)
+t_test = LinRange(0.0, 1.0, 30)
+
+# Maximum frequency in initial conditions
+K = 100
+
+# Solutions
+u_pod = create_data(f, (ν, Δx), K, x, 200, t_pod; reltol = 1e-4, abstol = 1e-6)
+u_train = create_data(f, (ν, Δx), K, x, 500, t_train; reltol = 1e-4, abstol = 1e-6)
+u_valid  = create_data(f, (ν, Δx), K, x, 20, t_valid; reltol = 1e-4, abstol = 1e-6)
+u_test  = create_data(f, (ν, Δx), K, x, 50, t_test; reltol = 1e-4, abstol = 1e-6)
+
+# Time derivatives
+dudt_pod = f(u_pod, (ν, Δx), 0)
+dudt_train = f(u_train, (ν, Δx), 0)
+dudt_valid = f(u_valid, (ν, Δx), 0)
+dudt_test = f(u_test, (ν, Δx), 0)
+
+# Number of POD modes
+m = 10;
+
+# Create POD basis
+Φ = get_Φ(reshape(u_pod, N, :), m)
+plot(Φ[:, 1:3])
+
+# POD coefficients
+v_pod = tensormul(Φ', u_pod)
+v_train = tensormul(Φ', u_train)
+v_valid = tensormul(Φ', u_valid)
+v_test = tensormul(Φ', u_test)
+
+# Time derivatives of POD coefficients
+dvdt_pod = tensormul(Φ', dudt_pod)
+dvdt_train = tensormul(Φ', dudt_train)
+dvdt_valid = tensormul(Φ', dudt_valid)
+dvdt_test = tensormul(Φ', dudt_test)
+
+# Reduced order model
+g(v, p, t) = Φ' * f(Φ * v, (ν, Δx), t)
+
+## Neural network
+# model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
+model = Flux.Chain(
+    v -> vcat(v, v .^ 2),
+    Flux.Dense(2m => 2m, tanh; init = Models.glorot_uniform_float64, bias = true),
+    Flux.Dense(2m => m, tanh; init = Models.glorot_uniform_float64, bias = true),
+    Flux.Dense(m => m, identity; init = Models.glorot_uniform_float64, bias = true),
+)
+p₀, re = Flux.destructure(model)
+fᵣₒₘ(v, p, t) = re(p)(v)
+
+function f_closure(v, p, t)
+    g(v, nothing, t) + fᵣₒₘ(v, p, t)
+end
+
+# Derivative fitting
 loss_df(p, _) = loss_derivative_fit(
     f_closure,
     p,
@@ -227,15 +277,14 @@ loss_df(p, _) = loss_derivative_fit(
     reshape(v_train, m, :);
     nsample = 100,
 )
-
 p_df = train(
     loss_df,
     p₀;
     maxiters = 5000,
     callback = create_callback(
         f_closure,
-        v_train[:, 1:20, :],
-        t_train;
+        v_valid,
+        t_valid;
         ncallback = 100,
         reltol = 1e-4,
         abstol = 1e-6,
@@ -259,53 +308,50 @@ p_tf = train(
     maxiters = 100,
     callback = create_callback(
         f_closure,
-        v_train[:, 1:20, :],
-        t_train;
+        v_valid,
+        t_valid;
         ncallback = 10,
         reltol = 1e-4,
         abstol = 1e-6,
     ),
 );
 
-
-# === Check results ===
-
+# Compare models
 sol_nomodel =
-    predict(g, v_train[:, :, 1], nothing, t_train, Tsit5(); reltol = 1e-4, abstol = 1e-6)
+    predict(g, v_test[:, :, 1], nothing, t_test, Tsit5(); reltol = 1e-4, abstol = 1e-6)
 sol_df = predict(
     f_closure,
-    v_train[:, :, 1],
+    v_test[:, :, 1],
     p_df,
-    t_train,
+    t_test,
     Tsit5();
     reltol = 1e-4,
     abstol = 1e-6,
 )
 sol_tf = predict(
     f_closure,
-    v_train[:, :, 1],
+    v_test[:, :, 1],
     p_tf,
-    t_train,
+    t_test,
     Tsit5();
     reltol = 1e-4,
     abstol = 1e-6,
 )
 
 iplot = 1
-for (i, t) ∈ enumerate(t_train)
+for (i, t) ∈ enumerate(t_test)
     pl = Plots.plot(;
         title = @sprintf("Solution, t = %.3f", t),
         xlabel = "x",
-        ylim = extrema(v_train[:, iplot, :]),
+        ylims = extrema(Φ * v_test[:, iplot, :]),
     )
-    plot!(pl, x, Φ * v_train[:, iplot, i]; label = "Projected FOM")
+    plot!(pl, x, Φ * v_test[:, iplot, i]; label = "Projected FOM")
     plot!(pl, x, Φ * sol_nomodel[:, iplot, i]; label = "ROM no closure")
     plot!(pl, x, Φ * sol_df[:, iplot, i]; label = "ROM neural closure (DF)")
     plot!(pl, x, Φ * sol_tf[:, iplot, i]; label = "ROM neural closure (TF)")
     display(pl)
     sleep(0.05)
 end
-
 
 # t, u₀, u = Generator.get_burgers_batch(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, ν, 2, (; m = 10));
 # v = Φ' * u;
