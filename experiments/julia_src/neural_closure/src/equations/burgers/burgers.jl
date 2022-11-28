@@ -15,7 +15,6 @@ function predict(f, u₀, p, t, solver; kwargs...)
     sol = solve(problem, solver; saveat=t, kwargs...)
 end
 
-
 function fflux(u, (ν, Δx), t)
   u₋ = circshift(u, 1)
   u₊ = circshift(u, -1)

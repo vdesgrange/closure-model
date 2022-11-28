@@ -145,7 +145,7 @@ k = 2 * pi * AbstractFFTs.fftfreq(xₙ, 1. / Δx)
 # Training times
 t_pod = LinRange(0.0, 2., Int(tₙ));
 Δt = (2. - tₘᵢₙ) / (tₙ - 1);
-t_train = LinRange(0.0, 2., Int(tₙ));
+t_train = LinRange(0.0, 2., Int(tₙ * 4));
 t_valid = LinRange(0.0, 4., Int(tₙ * 2));
 t_test = LinRange(0.0, tₘₐₓ, Int(tₙ * 3));
 

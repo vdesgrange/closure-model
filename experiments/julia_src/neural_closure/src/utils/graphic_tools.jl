@@ -1,7 +1,8 @@
 module GraphicTools
 
 using Plots
-using PyPlot
+gr()
+# using PyPlot
 
 
 function simple_plotter(ks, title="Simple plot", L=1.)
