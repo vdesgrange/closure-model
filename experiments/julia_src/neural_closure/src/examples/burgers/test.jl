@@ -15,11 +15,11 @@ include("../../utils/processing_tools.jl")
 include("../../neural_ode/models.jl")
 include("../../neural_ode/regularization.jl")
 
-tₘₐₓ= 0.5;
+tₘₐₓ= 1.;
 tₘᵢₙ = 0.;
 xₘₐₓ = 1.;
 xₘᵢₙ = 0;
-tₙ = 128;
+tₙ = 64;
 xₙ = 64;
 ν = 0.001;
 x = LinRange(xₘᵢₙ, xₘₐₓ, xₙ);
@@ -175,3 +175,34 @@ _prob = ODEProblem(f, hcat([u₀, u₀]...), extrema(t), (ν,  Δx); saveat=t);
 u = solve(_prob, Tsit5());
 size(u)
 display(GraphicTools.show_state(u[:, 1, :], t, x, "", "t", "x"))
+
+# ===== Compare initial conditions ====
+function f(u, (ν, Δx), t)
+  u₋ = circshift(u, 1)
+  u₊ = circshift(u, -1)
+  a₊ = u₊ + u
+  a₋ = u + u₋
+  du = @. -((a₊ < 0) * u₊^2 + (a₊ > 0) * u^2 - (a₋ < 0) * u^2 - (a₋ > 0) * u₋^2) / Δx +
+     ν * (u₋ - 2u + u₊) / Δx^2
+  du
+end
+
+
+using Distributions
+K = 50;
+u₀ = Generator.InitialFunctions.high_dim_random_init3(t, x, K);
+display(Plots.plot(x, u₀[1, :]; label = "u₀"));
+u = Array(predict(f, u₀[1, :], (ν, Δx), t, Tsit5()));
+display(GraphicTools.show_state(u, t, x, "", "t", "x"))
+
+function create_data_tmp(f, p, K, x, nsolution, t; decay = k -> 1 / (1 + abs(k)))
+  L = x[end]
+  basis = [exp(2π * im * k * x / L) for x ∈ x, k ∈ -K:K]
+  c = [randn() * decay(k) * exp(-2π * im * rand()) for k ∈ -K:K, _ ∈ 1:nsolution]
+  u₀ = real.(basis * c)
+  predict(f, u₀, p, t, Tsit5())
+end
+
+u3 = Array(create_data_tmp(f, (ν, Δx), K, x, 1, t));
+display(Plots.plot(x, u3[:, 1, 1]; label = "u₀"));
+display(GraphicTools.show_state(u3[:, 1, :], t, x, "", "t", "x"))

@@ -40,7 +40,7 @@ function generate_pod_basis(M, substract_mean::Bool = false)
   W = W[:, idx]
 
   D = sqrt.(abs.(λ));
-  θ = S * W * Diagonal(1 ./ D);
+  θ = real.(S * W) * Diagonal(1 ./ D);
   # A = Diagonal(D) * W';
   A = θ' * S;
 

@@ -196,12 +196,13 @@ begin
 end
 
 # === Check results ===
-begin
+# begin
   using Plots
   using PyPlot
   include("../../utils/graphic_tools.jl")
   include("../../neural_ode/objectives.jl")
-  
+  #include("../../utils/generators.jl");
+
   function f_closure(v, p, t)
     Φ' * f(Φ * v, (ν, Δx), t) + K(v);
   end
@@ -241,4 +242,4 @@ begin
 
   Objectives.nre(ū, (Φ * Φ' * u))
   Objectives.nre(uᵧₙₙ, (Φ * Φ' * u))
-end
+# end

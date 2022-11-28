@@ -48,17 +48,26 @@ function galerkin_projection(t, S, Φ, ν, dx, dt)
   L_k = zeros(r, r);
   N_k = zeros(r, r, r);
 
+  B_k = ((Lū + Nū)' * Φ)[1, :];
+  L_k = ((ν * L(Φ) + N(ū, Φ) + N(Φ, ū))' * Φ)';
   for k in range(1, n_modes, step=1)
-    B_k[k] = sum((Lū + Nū) .* Φ[:, k]);
-
     for i in range(1, n_modes, step=1)
-      L_k[k, i] = sum((ν * L(Φ[:, i]) + N(ū, Φ[:, i]) + N(Φ[:, i], ū)) .* Φ[:, k]);
-
-      for j in range(1, n_modes, step=1)
-        N_k[k, i, j] = sum(N(Φ[:, i], Φ[:, j]) .* Φ[:, k]);
-      end
+      cst = N(Φ[:, i], Φ);
+      N_k[k, i, :] .= sum(cst' * Φ[:, k]; dims=2);
     end
   end
+
+  # for k in range(1, n_modes, step=1)
+  #   B_k[k] = sum((Lū + Nū) .* Φ[:, k]);
+
+  #   for i in range(1, n_modes, step=1)
+  #     L_k[k, i] = sum((ν * L(Φ[:, i]) + N(ū, Φ[:, i]) + N(Φ[:, i], ū)) .* Φ[:, k]);
+
+  #     for j in range(1, n_modes, step=1)
+  #       N_k[k, i, j] = sum(N(Φ[:, i], Φ[:, j]) .* Φ[:, k]);
+  #     end
+  #   end
+  # end
 
   # Compute online operators
   function gp(a, B_k, L_k, N_k)
@@ -82,7 +91,8 @@ function galerkin_projection(t, S, Φ, ν, dx, dt)
     a = Solver.tvd_rk3(g, a, dt);
   end
 
-  return ū .+ Φ * A;
+  # return ū .+ Φ * A;
+  return ū .+ Φ * A, A;
 end
 
 

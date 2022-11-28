@@ -69,19 +69,17 @@ function high_dim_random_init2(t, x, m=28)
 end
 
 function high_dim_random_init3(t, x, m=28)
-  d = Normal(0., 1.)
-  nu = rand(d, 2 * m)
-  x = (x .- x[1]) ./ (x[end] .- x[1])
-  s = [nu[2 * k] / k * sin.(2 * pi * k * x) + nu[2 * k - 1] / k * cos.(2 * pi * k * x) for k in range(1, m, step=1)]
-
   u0 = zeros(Float64, size(t, 1), size(x, 1))
-  u0[1, :] .= (1 / sqrt(m)) .* sum(s) .+ rand(d);
-
+  L = x[end] .- x[1];
+  x = (x .- x[1]) ./ L;
+  decay = k -> 1 / (1 + abs(k));
+  basis = [exp(2π * im * k * x) for x ∈ x, k ∈ -m:m]
+  c = [randn() * decay(k) * exp(-2π * im * rand()) for k ∈ -m:m]
+  u₀ = real.(basis * c);
+  u0[1, :] .= u₀;
   return u0
 end
 
-function analytical_burgers_1d(t, x, nu)
-end
 
 function burgers_analytical_init(t, x, nu)
   u0 = zeros(Float64, size(t, 1), size(x, 1))
@@ -92,16 +90,12 @@ function burgers_analytical_init(t, x, nu)
   return u0
 end
 
-function advecting_shock(t, x, nu)
-  Re = 1. / nu;
-  t0 = exp(Re / 8.);
-
-  u0 = zeros(Float64, size(t, 1), size(x, 1));
-  u0[1, :] .= x ./ (1 .+ sqrt(1. / t0) * exp.(Re * (x.^2 ./ 4)));
-  u0[:, 1] .= 0
-  u0[:, end] .= 0
-
-  return u0
+function advecting_shock(t, x, ν)
+  Re = 1. / ν;
+  t₀ = exp(Re / 8.);
+  u = zeros(Float64, size(t, 1), size(x, 1));
+  u[1, :] .= x ./ (1 .+ sqrt(1. / t₀) * exp.(Re * (x.^2 ./ 4)));
+  return u
 end
 
 function analytical_heat_1d(t, x, n=[], c=[], κ=1.)
