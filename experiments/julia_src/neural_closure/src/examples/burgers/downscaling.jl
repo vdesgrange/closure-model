@@ -3,6 +3,7 @@ using FFTW
 using Statistics
 using LaTeXStrings
 using JLD2
+using BSON
 include("burgers_closure_galerkin_2.jl")
 include("../../equations/equations.jl");
 
@@ -76,8 +77,6 @@ function create_data_fft(f, p, K, x, nsolution, t; decay = k -> 1 / (1 + abs(k))
     predict(f, u₀, p, t, Tsit5(); kwargs...)
 end
 
-epochs = 100;
-ratio = 0.75;
 batch_size = 64; # High for derivative fitting (i.e. 64)
 lr = 1e-3;
 reg = 1e-7;
@@ -111,18 +110,17 @@ vt_test = Array(t_test)[1:up:end];
 
 ν = 0.; # Viscosity
 K = 100;  # Maximum frequency in initial conditions
-invi_u_train = create_data_fft(f_godunov, (ν, Δx), K, x, 192, t_train; reltol = 1e-6, abstol = 1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
-invi_u_valid  = create_data_fft(f_godunov, (ν, Δx), K, x, 64, t_valid; reltol = 1e-6, abstol = 1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
-invi_u_test  = create_data_fft(f_godunov, (ν, Δx), K, x, 32, t_test; reltol = 1e-6, abstol = 1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
+# invi_u_train = create_data_fft(f_godunov, (ν, Δx), K, x, 192, t_train; reltol = 1e-6, abstol = 1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
+# invi_u_valid  = create_data_fft(f_godunov, (ν, Δx), K, x, 64, t_valid; reltol = 1e-6, abstol = 1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
+# invi_u_test  = create_data_fft(f_godunov, (ν, Δx), K, x, 32, t_test; reltol = 1e-6, abstol = 1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
 
-invi_v_train = downsampling(invi_u_train, up);
-invi_v_valid = downsampling(invi_u_valid, up);
-invi_v_test  = downsampling(invi_u_test, up);
+# invi_v_train = downsampling(invi_u_train, up);
+# invi_v_valid = downsampling(invi_u_valid, up);
+# invi_v_test  = downsampling(invi_u_test, up);
 
 invi_v_train = JLD2.load("./dataset/inviscid/inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.jld2")["training_set"];
 invi_v_valid = JLD2.load("./dataset/inviscid/valid_inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.jld2")["validation_set"];
 invi_v_test = JLD2.load("./dataset/inviscid/test_inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.jld2")["test_set"];
-
 
 Δx2 = (xₘₐₓ - xₘᵢₙ) / (xₙ - 1);
 invi_dvdt_train = f_godunov(invi_v_train, (ν, Δx2), 0);
@@ -142,37 +140,32 @@ invi_dvdt_test = f_godunov(invi_v_test, (ν, Δx2), 0);
 # JLD2.save("./dataset/valid_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_64_up16_j173.jld2", "validation_set", v_valid)
 # JLD2.save("./dataset/test_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_32_up16_j173.jld2", "test_set", v_test)
 
-v_train = JLD2.load("./dataset/viscous/viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_256_up16_j173.jld2")["training_set"];
-v_valid = JLD2.load("./dataset/viscous/valid_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_64_up16_j173.jld2")["validation_set"];
-v_test = JLD2.load("./dataset/viscous/test_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_32_up16_j173.jld2")["test_set"];
+# v_train = JLD2.load("./dataset/viscous/viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_256_up16_j173.jld2")["training_set"];
+# v_valid = JLD2.load("./dataset/viscous/valid_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_64_up16_j173.jld2")["validation_set"];
+# v_test = JLD2.load("./dataset/viscous/test_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_32_up16_j173.jld2")["test_set"];
 
-dvdt_train = Equations.fflux(v_train, (ν, Δx), 0);
-dvdt_valid = Equations.fflux(v_valid, (ν, Δx), 0);
-dvdt_test = Equations.fflux(v_test, (ν, Δx), 0);
+# dvdt_train = Equations.fflux(v_train, (ν, Δx), 0);
+# dvdt_valid = Equations.fflux(v_valid, (ν, Δx), 0);
+# dvdt_test = Equations.fflux(v_test, (ν, Δx), 0);
 
-display(GraphicTools.show_state(v_train[:, 1, :], vt_train, vx, "Low-resolution with FOM model", "t", "x"))
-display(GraphicTools.show_state(invi_v_train[:, 1, :], vt_train, vx, "Low-resolution with FOM model", "t", "x"))
+# display(GraphicTools.show_state(v_train[:, 1, :], vt_train, vx, "Low-resolution with FOM model", "t", "x"))
+# display(GraphicTools.show_state(invi_v_train[:, 1, :], vt_train, vx, "Low-resolution with FOM model", "t", "x"))
 
-begin
-    plt = plot(title="Initial condition", xlabel="t", ylabel="u", background_color_legend = RGBA(1, 1, 1, 0.8))
-    plot!(plt, vt_train, invi_v_train[:, 1, 1], c=:coral, label=L"u_0")
-end
+# begin
+#     plt = plot(title="Initial condition", xlabel="t", ylabel="u", background_color_legend = RGBA(1, 1, 1, 0.8))
+#     plot!(plt, vt_train, invi_v_train[:, 1, 1], c=:coral, label=L"u_0")
+# end
 
-iplot = 1;
-for (i, t) ∈ enumerate(vt_train)
-    pl = Plots.plot(;title = @sprintf("Solution, t = %.3f", t), xlabel = "x", ylims = extrema(invi_v_train[:, iplot, :]))
-    plot!(pl, vx, invi_v_train[:, iplot, i]; label = "Downscaled FOM")
-    display(pl)
-    sleep(0.05)
-end
+# iplot = 1;
+# for (i, t) ∈ enumerate(vt_train)
+#     pl = Plots.plot(;title = @sprintf("Solution, t = %.3f", t), xlabel = "x", ylims = extrema(invi_v_train[:, iplot, :]))
+#     plot!(pl, vx, invi_v_train[:, iplot, i]; label = "Downscaled FOM")
+#     display(pl)
+#     sleep(0.05)
+# end
 
 
 # === Model ===
-model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
-p₀, re = Flux.destructure(model);
-fᵣₒₘ(v, p, t) = re(p)(v);
-
-f_closure = 
 
 function loss_trajectory_fit_cnn(
     f,
@@ -256,34 +249,40 @@ function create_callback_cnn(f, v, t; ncallback = 1, solver = Tsit5(), kwargs...
             push!(epochs, ep);
             push!(errors, e);
             println("Epoch $ep \t relative error $e")
-            display(plot(epochs, errors; xlabel = "Epochs", title = "Relative error")) # Iteration
+            plt = Plots.plot(epochs, errors; xlabel = "Epochs", title = "Relative error");
+            savefig(pl, "inviscid_loss_per_epoch.png")
+            # display(plot(epochs, errors; xlabel = "Epochs", title = "Relative error")) # Iteration
         end
         return false
     end
 end
 
-loss_df(p, _) = loss_derivative_fit_cnn(
-    fᵣₒₘ,
-    p,
-    reshape(invi_dvdt_train, xₙ, :),
-    reshape(invi_v_train, xₙ, :);
-    nsample = 64,
-);
+model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
+p₀, re = Flux.destructure(model);
+fᵣₒₘ(v, p, t) = re(p)(v);
 
-p_df = train(
-    loss_df,
-    p₀;
-    maxiters = 100 * (192 / 64), # * (192 / 16)
-    optimizer = OptimizationOptimisers.Adam(lr),
-    callback = create_callback_cnn(
-        fᵣₒₘ,
-        invi_v_valid,
-        vt_valid;
-        ncallback = (192 / 64),
-        reltol = 1e-6,
-        abstol = 1e-6,
-    ),
-);
+# loss_df(p, _) = loss_derivative_fit_cnn(
+#     fᵣₒₘ,
+#     p,
+#     reshape(invi_dvdt_train, xₙ, :),
+#     reshape(invi_v_train, xₙ, :);
+#     nsample = 64,
+# );
+
+# p_df = train(
+#     loss_df,
+#     p₀;
+#     maxiters = 100 * (192 / 64), # * (192 / 16)
+#     optimizer = OptimizationOptimisers.Adam(lr),
+#     callback = create_callback_cnn(
+#         fᵣₒₘ,
+#         invi_v_valid,
+#         vt_valid;
+#         ncallback = (192 / 64),
+#         reltol = 1e-6,
+#         abstol = 1e-6,
+#     ),
+# );
 
 loss_tf(p, _) = loss_trajectory_fit_cnn(
     fᵣₒₘ,
@@ -295,64 +294,55 @@ loss_tf(p, _) = loss_trajectory_fit_cnn(
     abstol = 1e-6,
 );
 
+epochs = 500;
 p_tf = train(
     loss_tf,
     p₀;
-    maxiters = 10 * (192 / 16),
+    maxiters = epochs * (192 / 16),
     optimizer = OptimizationOptimisers.Adam(lr),
     callback = create_callback_cnn(
         fᵣₒₘ,
         invi_v_valid,
         vt_valid;
         ncallback = (192 / 16),
-        reltol = 1e-4,
+        reltol = 1e-6,
         abstol = 1e-6,
     ),
 );
 
-sol_df = predict(
-    fᵣₒₘ,
-    reshape(v_test[:, :, 1], xₙ, 1, :),
-    p_df,
-    vt_test,
-    Tsit5();
-    reltol = 1e-6,
-    abstol = 1e-6,
-);
+savefig("inviscid_loss_per_epoch.png")
+BSON.@save "./models/pure_node_inviscid/inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.bson" model p_tf
 
-sol_tf = predict(
-    fᵣₒₘ,
-    v_test[:, :, 1],
-    p_tf,
-    t_test,
-    Tsit5();
-    reltol = 1e-6,
-    abstol = 1e-6,
-);
+# BSON.@load "./models/pure_node_inviscid/inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.bson" model p_tf
 
+# begin
+#     # sol_df = predict(
+#     #     fᵣₒₘ,
+#     #     reshape(v_test[:, :, 1], xₙ, 1, :),
+#     #     p_df,
+#     #     vt_test,
+#     #     Tsit5();
+#     #     reltol = 1e-6,
+#     #     abstol = 1e-6,
+#     # );
 
-iplot = 1;
-for (i, t) ∈ enumerate(vt_test)
-    pl = Plots.plot(;title = @sprintf("Solution, t = %.3f", t), xlabel = "x", ylims = extrema(v_test[:, iplot, :]))
-    plot!(pl, vx, v_test[:, iplot, i]; label = "FOM")
-    plot!(pl, vx, sol_df[:, 1, iplot, i]; label = "ROM neural closure (DF)")
-        # plot!(pl, x, sol_tf[:, iplot, i]; label = "ROM neural closure (TF)")
-    display(pl)
-    sleep(0.05)
-end
+#     sol_tf = predict(
+#         fᵣₒₘ,
+#         invi_v_test[:, :, 1],
+#         p_tf,
+#         vt_test,
+#         Tsit5();
+#         reltol = 1e-6,
+#         abstol = 1e-6,
+#     );
 
-
-# === Results ===
-function animate_snapshot_prediction(u_pred, u, x, filename)
-    t_n = 64
-   
-    anim = @animate for i ∈ 1:t_n
-        plt = plot(x, u[:, i], label="u")
-        plot!(plt, x, u_pred[:, i], linestyle=:dash, label="û")
-        plot!(plt; xlims=(0., pi), ylims=(-2, 2.), dpi=300)
-    end
-
-    gif(anim, filename, fps = 15)
-end
-
-
+#     iplot = 1;
+#     for (i, t) ∈ enumerate(vt_test)
+#         pl = Plots.plot(;title = @sprintf("Solution, t = %.3f", t), xlabel = "x", ylims = extrema(invi_v_test[:, iplot, :]))
+#         plot!(pl, vx, invi_v_test[:, iplot, i]; label = "FOM")
+#         plot!(pl, vx, sol_tf[:, iplot, i]; label = "ROM neural closure (DF)")
+#             # plot!(pl, x, sol_tf[:, iplot, i]; label = "ROM neural closure (TF)")
+#         display(pl)
+#         sleep(0.05)
+#     end
+# end
