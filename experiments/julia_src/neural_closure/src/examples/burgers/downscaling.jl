@@ -257,6 +257,7 @@ function create_callback_cnn(f, v, t; ncallback = 1, solver = Tsit5(), kwargs...
     end
 end
 
+@info("Load model");
 model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
 p₀, re = Flux.destructure(model);
 fᵣₒₘ(v, p, t) = re(p)(v);
@@ -310,6 +311,7 @@ p_tf = train(
     ),
 );
 
+@info("Save results");
 savefig("inviscid_loss_per_epoch.png")
 BSON.@save "./models/pure_node_inviscid/inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.bson" model p_tf
 
