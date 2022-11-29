@@ -123,10 +123,9 @@ function training(model, epochs, dataset, opt, batch_size, ratio, noise=0., sol=
         push!(mses, ltraj);
         push!(errors, lrel);
 
-        pl1 = Plots.plot(epochs, errors; xlabel = "Epochs", title = "Relative error", dpi=600, label="Relative error");
-        pl2 = Plots.plot(epochs, mses; xlabel = "Epochs", title = "Mean square error", dpi=600, label="MSE");
-        savefig(pl1, "old_model_inviscid_relative_error_per_epoch.png")
-        savefig(pl2, "old_model_inviscid_mse_per_epoch.png")
+        # pl1 = Plots.plot(epochs, errors; xlabel = "Epochs", title = "Relative error", dpi=600, label="Relative error");
+        Plots.plot(epochs, mses; xlabel = "Epochs", title = "Mean square error", dpi=600, label="MSE");
+        # savefig(pl1, "old_model_inviscid_relative_error_per_epoch.png");
 
         @info("Epoch ", ep, lval, ltraj);
 
@@ -161,7 +160,7 @@ using OptimizationOptimisers
 include("../../neural_ode/models.jl");
 include("../../utils/generators.jl");
 
-epochs = 2; # Iterations
+epochs = 200; # Iterations
 ratio = 0.75; # train/val ratio
 lr = 0.001; # learning rate
 reg = 1e-7; # weigh decay (L2 reg)
@@ -180,3 +179,4 @@ dataset = Generator.read_dataset("./dataset/inviscid/old_model_inviscid_burgers_
 model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
 K, p, _ = training(model, epochs, dataset, opt, batch_size, ratio, noise, sol, snap_kwargs);
 @save "./models/pure_node_inviscid/old_model_inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ5_K200_256_up8_j173.bson" K p
+savefig("old_model_inviscid_mse_per_epoch.png");
