@@ -81,7 +81,7 @@ ratio = 0.75;
 batch_size = 64; # High for derivative fitting (i.e. 64)
 lr = 1e-3;
 reg = 1e-7;
-noise = 0.05;
+# noise = 0.05;
 tₘₐₓ= 2.; # 2.
 tₘᵢₙ = 0.;
 xₘₐₓ = pi; # pi
@@ -142,13 +142,13 @@ invi_dvdt_test = f_godunov(invi_v_test, (ν, Δx2), 0);
 # JLD2.save("./dataset/valid_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_64_up16_j173.jld2", "validation_set", v_valid)
 # JLD2.save("./dataset/test_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_32_up16_j173.jld2", "test_set", v_test)
 
-v_train = JLD2.load("./dataset/viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_256_up16_j173.jld2")["training_set"];
-v_valid = JLD2.load("./dataset/valid_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_64_up16_j173.jld2")["validation_set"];
-v_test = JLD2.load("./dataset/test_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_32_up16_j173.jld2")["test_set"];
+v_train = JLD2.load("./dataset/viscous/viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_256_up16_j173.jld2")["training_set"];
+v_valid = JLD2.load("./dataset/viscous/valid_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_64_up16_j173.jld2")["validation_set"];
+v_test = JLD2.load("./dataset/viscous/test_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_32_up16_j173.jld2")["test_set"];
 
-dvdt_train = fflux(v_train, (ν, Δx), 0);
-dvdt_valid = fflux(v_valid, (ν, Δx), 0);
-dvdt_test = fflux(v_test, (ν, Δx), 0);
+dvdt_train = Equations.fflux(v_train, (ν, Δx), 0);
+dvdt_valid = Equations.fflux(v_valid, (ν, Δx), 0);
+dvdt_test = Equations.fflux(v_test, (ν, Δx), 0);
 
 display(GraphicTools.show_state(v_train[:, 1, :], vt_train, vx, "Low-resolution with FOM model", "t", "x"))
 display(GraphicTools.show_state(invi_v_train[:, 1, :], vt_train, vx, "Low-resolution with FOM model", "t", "x"))
@@ -172,6 +172,8 @@ model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
 p₀, re = Flux.destructure(model);
 fᵣₒₘ(v, p, t) = re(p)(v);
 
+f_closure = 
+
 function loss_trajectory_fit_cnn(
     f,
     p,
@@ -189,13 +191,11 @@ function loss_trajectory_fit_cnn(
     t = t[it]
 
     # Predicted soluton
-    @show size(v)
     (xₙ, bₙ, tₙ) = size(v);
-    v = reshape(v, xₙ, 1, bₙ, tₙ); # CNN 
-
-    sol = predict(f, v[:, :, :, 1], p, t, solver; kwargs...);
+    # v = reshape(v, xₙ, 1, bₙ, tₙ); # CNN 
+    sol = predict(f, v[:, :, 1], p, t, solver; kwargs...);
     sol = reshape(sol, xₙ, bₙ, tₙ); # CNN 
-    v = reshape(v, xₙ, bₙ, tₙ); # CNN 
+    # v = reshape(v, xₙ, bₙ, tₙ); # CNN 
 
     # Relative squared error
     data = sum(abs2, sol - v) / sum(abs2, v)
@@ -215,9 +215,8 @@ function loss_derivative_fit_cnn(f, p, dvdt, v; λ = 1e-8, nsample = size(v, 2))
 
     (xₙ, tₙ) = size(dvdt);
 
-    v = reshape(v, xₙ, 1, :) # CNN
-    dvdt = reshape(dvdt, xₙ, 1, tₙ);  # CNN
-
+    # v = reshape(v, xₙ, 1, :) # CNN
+    # dvdt = reshape(dvdt, xₙ, 1, tₙ);  # CNN
 
     # Predicted right hand side
     rhs = f(v, p, 0)
@@ -235,10 +234,8 @@ end
 function relative_error_cnn(f, p, v, t, solver; kwargs...)
     # Predicted soluton
     (xₙ, bₙ, tₙ) = size(v);
-    v = reshape(v, xₙ, 1, bₙ, tₙ); # CNN 
-    sol = predict(f, v[:, :, :, 1], p, t, solver; kwargs...)
+    sol = predict(f, v[:, :, 1], p, t, solver; kwargs...)
     sol = reshape(sol, xₙ, bₙ, tₙ); # CNN 
-    v = reshape(v, xₙ, bₙ, tₙ); # CNN 
 
     # Relative error
     norm(sol - v) / norm(v)
@@ -276,13 +273,13 @@ loss_df(p, _) = loss_derivative_fit_cnn(
 p_df = train(
     loss_df,
     p₀;
-    maxiters = 10 * (192 / 64), # * (192 / 16)
+    maxiters = 100 * (192 / 64), # * (192 / 16)
     optimizer = OptimizationOptimisers.Adam(lr),
     callback = create_callback_cnn(
         fᵣₒₘ,
         invi_v_valid,
         vt_valid;
-        ncallback = 64,
+        ncallback = (192 / 64),
         reltol = 1e-6,
         abstol = 1e-6,
     ),
@@ -291,24 +288,23 @@ p_df = train(
 loss_tf(p, _) = loss_trajectory_fit_cnn(
     fᵣₒₘ,
     p,
-    invi_v_train[:, 1:2, :],
+    invi_v_train,
     vt_train;
-    nsolution = 2,
+    nsolution = 16,
     reltol = 1e-6,
     abstol = 1e-6,
 );
 
-
 p_tf = train(
     loss_tf,
     p₀;
-    maxiters = 10,
+    maxiters = 10 * (192 / 16),
     optimizer = OptimizationOptimisers.Adam(lr),
-    callback = create_callback(
+    callback = create_callback_cnn(
         fᵣₒₘ,
         invi_v_valid,
         vt_valid;
-        ncallback = 1,
+        ncallback = (192 / 16),
         reltol = 1e-4,
         abstol = 1e-6,
     ),
@@ -347,19 +343,16 @@ end
 
 
 # === Results ===
+function animate_snapshot_prediction(u_pred, u, x, filename)
+    t_n = 64
+   
+    anim = @animate for i ∈ 1:t_n
+        plt = plot(x, u[:, i], label="u")
+        plot!(plt, x, u_pred[:, i], linestyle=:dash, label="û")
+        plot!(plt; xlims=(0., pi), ylims=(-2, 2.), dpi=300)
+    end
 
-# Old model
-BSON.@load "./models/cnn_viscous_256_2/viscous_burgers_high_dim_m10_256_500epoch_model2_j173.bson" K p
-t, u₀, u = Generator.get_burgers_batch(tₘₐₓ, tₘᵢₙ, xₘₐₓ, xₘᵢₙ, tₙ, xₙ, 0.04, 2, (; m=10));
-_prob = ODEProblem((u, p, t) -> K(u), reshape(u₀, :, 1, 1), extrema(t), p; saveat=t);
-û = Array(solve(_prob, Tsit5(), reltol=1e-6, abstol=1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
-display(GraphicTools.show_err(u, û[:, 1, 1, :], t, vx, "ROM neural closure (TF)", "t", "x"))
-display(GraphicTools.show_state(u, t, vx, "Low-resolution with FOM model", "t", "x"))
-display(GraphicTools.show_state(û[:, 1, 1, :], t, vx, "ROM neural closure (TF)", "t", "x"))
-for (i, t) ∈ enumerate(t)
-    pl = Plots.plot(;title = @sprintf("Solution, t = %.3f", t), xlabel = "x", ylims = extrema(u[:, :]))
-    plot!(pl, vx, u[:, i]; label = "FOM")
-    plot!(pl, vx, û[:, 1, 1, i]; label = "ROM neural closure (TF)")
-    display(pl)
-    sleep(0.05)
+    gif(anim, filename, fps = 15)
 end
+
+

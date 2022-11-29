@@ -28,12 +28,14 @@ function CNN2(k, channels)
   # (nx, 1, nsample) -> CNN -> (nx, 1, nsample)
   kernel = Models.glorot_uniform_float64(k, channels[end-1], channels[end]);
   return Flux.Chain(
+    x -> reshape(x, size(x, 1), 1, size(x)[2:end]...),
     x -> Block.Extend(x, Int8(floor(k / 2))),
     x -> Block.Power2(x),
     hidden...,
     Flux.Conv(kernel, true, identity; stride = 1, pad = SamePad()),
     # Flux.Conv((k,), channels[end-1] => channels[end], identity; stride = 1, pad = SamePad(), bias=true, init=Flux.glorot_uniform),
     x -> Block.Reduce(x, Int8(floor(k / 2))),
+    x -> reshape(x, size(x, 1), size(x)[3:end]...),
   )
 end
 

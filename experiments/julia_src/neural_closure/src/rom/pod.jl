@@ -80,7 +80,7 @@ Quality of information is measured using relative information, aka. energy.
 - `m::Integer` : number of modes
 """
 function get_energy(λ::Vector{<:Real}, m::Integer)
-  return (sum(λ[1:m]; dims=1) / sum(λ; dims=1))[1];
+  return (sum(abs, λ[1:m]; dims=1) / sum(abs, λ; dims=1))[1];
 end
 
 # function get_energy2(λ::Vector{<:Real}, m::Integer)

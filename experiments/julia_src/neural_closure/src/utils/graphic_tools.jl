@@ -63,7 +63,7 @@ function show_state(u, x, y, title, xlabel, ylabel)
     return pl;
 end
 
-function show_err(u, û, x, y, title, xlabel, ylabel)
+function show_err(u, û, x, y, title, xlabel, ylabel; diff = (u, û) -> abs.(u .- û))
     """
         show_err(u, û, x, y, title, xlabel, ylabel)
         Display absolute difference between 2 matrices.
@@ -85,7 +85,7 @@ function show_err(u, û, x, y, title, xlabel, ylabel)
     xformatter = x -> string(round(x / xₙ * xₘₐₓ + xₘᵢₙ, digits=2));
     yformatter = y -> string(round(y / yₙ * yₘₐₓ + yₘᵢₙ, digits=2));
 
-    pl = heatmap(abs.(u .- û), c=:dense);
+    pl = heatmap(diff(u, û), c=:dense);
     heatmap!(pl,
         title = title,
         dpi=600,
