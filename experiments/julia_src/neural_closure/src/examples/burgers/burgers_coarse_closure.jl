@@ -114,7 +114,7 @@ using OptimizationOptimisers
 include("../../neural_ode/models.jl");
 include("../../utils/generators.jl");
 
-epochs = 500; # Iterations
+epochs = 50; # Iterations
 ratio = 0.75; # train/val ratio
 lr = 0.001; # learning rate
 reg = 1e-7; # weigh decay (L2 reg)
@@ -125,7 +125,7 @@ tₙ = 64;
 xₙ = 64;
 xₘₐₓ = pi;
 Δx = xₘₐₓ / (xₙ - 1);
-ν = 0.04;
+ν = 0.;
 snap_kwargs = (; ν, Δx, reg);
 
 opt = OptimizationOptimisers.Adam(lr, (0.9, 0.999)); 

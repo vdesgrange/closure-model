@@ -1,64 +1,23 @@
-using AbstractFFTs
-using FFTW
 using Statistics
 using LaTeXStrings
 using JLD2
 using BSON
-include("burgers_closure_galerkin_2.jl")
+include("closure.jl")
 include("../../equations/equations.jl");
+include("../../utils/graphic_tools.jl")
 
-
-function f_fft(u, (ν, Δx), t)
-    û = FFTW.fft(u)
-    ûₓ = 1im .* k .* û
-    ûₓₓ = (-k.^2) .* û
-
-    uₓ = FFTW.ifft(ûₓ)
-    uₓₓ = FFTW.ifft(ûₓₓ)
-    uₜ = -u .* uₓ + ν .* uₓₓ
-    return real.(uₜ)
-end
-
-function fflux2(u, (ν, Δx), t)
-    u₋ = circshift(u, 1)
-    u₊ = circshift(u, -1)
-    u₊[end] = 0;
-    u₋[1] = 0;
-    a₊ = u₊ + u
-    a₋ = u + u₋
-    du = @. -((a₊ < 0) * u₊^2 + (a₊ > 0) * u^2 - (a₋ < 0) * u^2 - (a₋ > 0) * u₋^2) / Δx + ν * (u₋ - 2u + u₊) / Δx^2
-    du
-end
-
-function riemann(u, xt)
-    u₋ = circshift(u, 1)
-    u₊ = circshift(u, -1)
-
-    S = (u₊ .+ u₋) ./ 2.;
-    a = (u₊ .>= u₋) .* (((S .> xt) .* u₋) .+ ((S .<= xt) .* u₊));
-    b = (u₊ .< u₋) .* (
-        ((xt .<= u₋) .* u₋) .+
-        (((xt .> u₋) .& (xt .< u₊)) .* xt) +
-        ((xt .>= u₊) .* u₊)
-        );
-    return a .+ b;
-end
-
-function νm_flux(u, xt=0.)
-    r = riemann(u, xt);
-    return r.^2 ./ 2.;
-end
-
-function f_godunov(u, (ν, Δx), t)
-    ū = deepcopy(u);
-    nf_u = νm_flux(ū, 0.);
-    nf_u₋ = circshift(nf_u, 1);
-    nf_u₊ = circshift(nf_u, -1);
-
-    uₜ = - (nf_u₊ - nf_u₋) ./ Δx
+function f_kdv(u, (Δx), t)
+    u₋₋ = circshift(u, 2);
+    u₋ = circshift(u, 1);
+    u₊ = circshift(u, -1);
+    u₊₊ = circshift(u, -2);
+  
+    uₓ = (u₊ .- u₋) ./ (2 * Δx);
+    uₓₓₓ = (-u₋₋ .+ 2 .*u₋ .- 2u₊ + u₊₊) ./ (2 * Δx^3);
+    uₜ = -(6u .* uₓ) .- uₓₓₓ;
     return uₜ
 end
-  
+
 function downsampling(u, d)
     (Nₓ, b, Nₜ) = size(u);
     Dₜ = Int64(Nₜ / d);
@@ -69,21 +28,19 @@ function downsampling(u, d)
     return u₃
 end
 
-function create_data_fft(f, p, K, x, nsolution, t; decay = k -> 1 / (1 + abs(k)), kwargs...)
+function create_data_kdv(f, p, K, x, nsolution, t; decay = k -> 1 / (1 + abs(k)), kwargs...)
     L = x[end]
     basis = [exp(2π * im * k * x / L) for x ∈ x, k ∈ -K:K]
     c = [randn() * decay(k) * exp(-2π * im * rand()) for k ∈ -K:K, _ ∈ 1:nsolution]
     u₀ = real.(basis * c)
-    predict(f, u₀, p, t, Tsit5(); kwargs...)
+    predict(f, u₀, p, t, Rodas4P(), dt=0.1; kwargs...)
 end
 
-batch_size = 64; # High for derivative fitting (i.e. 64)
 lr = 1e-3;
 reg = 1e-7;
-# noise = 0.05;
-tₘₐₓ= 2.; # 2.
+tₘₐₓ= 10; # 2.
 tₘᵢₙ = 0.;
-xₘₐₓ = pi; # pi
+xₘₐₓ = 30; # pi
 xₘᵢₙ = 0;
 tₙ = 64;
 xₙ = 64;
@@ -91,10 +48,8 @@ xₙ = 64;
 sol = Tsit5();
 
 # discretization
-up = 8;
+up = 2;
 x = LinRange(xₘᵢₙ, xₘₐₓ, up * xₙ);
-Δx = (xₘₐₓ - xₘᵢₙ) / (up * xₙ - 1);
-k = 2 * pi * AbstractFFTs.fftfreq(up * xₙ, 1. / Δx) 
 
 # Training times
 t_train = LinRange(0.0, tₘₐₓ, Int(up * tₙ));
@@ -107,48 +62,34 @@ vt_valid = Array(t_valid)[1:up:end];
 vt_test = Array(t_test)[1:up:end];
 
 # === Data ===
+K = 20;  # Maximum frequency in initial conditions
+ff = f_kdv
+Δx = (xₘₐₓ - xₘᵢₙ) / (up * xₙ - 1);
+u_train = create_data_kdv(ff, (Δx), K, x, 8, t_train; sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
+# u_valid  = create_data_kdv(ff, (Δx), K, x, 64, t_valid; reltol = 1e-6, abstol = 1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
+# u_test  = create_data_kdv(ff, (Δx), K, x, 32, t_test; reltol = 1e-6, abstol = 1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
 
-ν = 0.; # Viscosity
-K = 100;  # Maximum frequency in initial conditions
-# invi_u_train = create_data_fft(f_godunov, (ν, Δx), K, x, 192, t_train; reltol = 1e-6, abstol = 1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
-# invi_u_valid  = create_data_fft(f_godunov, (ν, Δx), K, x, 64, t_valid; reltol = 1e-6, abstol = 1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
-# invi_u_test  = create_data_fft(f_godunov, (ν, Δx), K, x, 32, t_test; reltol = 1e-6, abstol = 1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
+# JLD2.save("./dataset/train_kdv_fouriers_t1_64_xpi_64_typ5_K100_256_up16_j173.jld2", "training_set", iv_train);
+# JLD2.save("./dataset/valid_kdv_fouriers_t1_64_xpi_64_typ5_K100_256_up16_j173.jld2", "validation_set", v_valid);
+# JLD2.save("./dataset/test_kdv_fouriers_t1_64_xpi_64_typ5_K100_256_up16_j173.jld2", "test_set", v_test);
 
-# invi_v_train = downsampling(invi_u_train, up);
-# invi_v_valid = downsampling(invi_u_valid, up);
-# invi_v_test  = downsampling(invi_u_test, up);
-
-invi_v_train = JLD2.load("./dataset/inviscid/inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.jld2")["training_set"];
-invi_v_valid = JLD2.load("./dataset/inviscid/valid_inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.jld2")["validation_set"];
-invi_v_test = JLD2.load("./dataset/inviscid/test_inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.jld2")["test_set"];
 
 Δx2 = (xₘₐₓ - xₘᵢₙ) / (xₙ - 1);
-invi_dvdt_train = f_godunov(invi_v_train, (ν, Δx2), 0);
-invi_dvdt_valid = f_godunov(invi_v_valid, (ν, Δx2), 0);
-invi_dvdt_test = f_godunov(invi_v_test, (ν, Δx2), 0);
-
-
-# JLD2.save("./dataset/inviscid/inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.jld2", "training_set", invi_v_train);
-# JLD2.save("./dataset/inviscid/valid_inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.jld2", "validation_set", invi_v_valid);
-# JLD2.save("./dataset/inviscid/test_inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.jld2", "test_set", invi_v_test);
-
-
-# v_train = downsampling(u_train, up);
+v_train = downsampling(u_train, up);
 # v_valid = downsampling(u_valid, up);
 # v_test  = downsampling(u_test, up);
-# JLD2.save("./dataset/viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_256_up16_j173.jld2", "training_set", v_train)
-# JLD2.save("./dataset/valid_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_64_up16_j173.jld2", "validation_set", v_valid)
-# JLD2.save("./dataset/test_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_32_up16_j173.jld2", "test_set", v_test)
 
-# v_train = JLD2.load("./dataset/viscous/viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_256_up16_j173.jld2")["training_set"];
-# v_valid = JLD2.load("./dataset/viscous/valid_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_64_up16_j173.jld2")["validation_set"];
-# v_test = JLD2.load("./dataset/viscous/test_viscous_burgers_fouriers_t2_64_xpi_64_nu0.01_typ2_K10_32_up16_j173.jld2")["test_set"];
+# v_train = JLD2.load("./dataset/train_kdv_fouriers_t1_64_xpi_64_typ5_K100_256_up16_j173.jld2")["training_set"];
+# v_valid = JLD2.load("./dataset/valid_kdv_fouriers_t1_64_xpi_64_typ5_K100_256_up16_j173.jld2")["validation_set"];
+# v_test = JLD2.load("./dataset/test_kdv_fouriers_t1_64_xpi_64_typ5_K100_256_up16_j173.jld2")["test_set"];
 
-# dvdt_train = Equations.fflux(v_train, (ν, Δx), 0);
-# dvdt_valid = Equations.fflux(v_valid, (ν, Δx), 0);
-# dvdt_test = Equations.fflux(v_test, (ν, Δx), 0);
 
-# display(GraphicTools.show_state(v_train[:, 1, :], vt_train, vx, "Low-resolution with FOM model", "t", "x"))
+dvdt_train = ff(v_train, (Δx2), 0);
+# dvdt_valid = ff(v_valid, (ν, Δx2), 0);
+# dvdt_test = ff(v_test, (ν, Δx2), 0);
+
+gr();
+display(GraphicTools.show_state(v_train[:, 1, :], vt_train, vx, "Low-resolution with FOM model", "t", "x"))
 # display(GraphicTools.show_state(invi_v_train[:, 1, :], vt_train, vx, "Low-resolution with FOM model", "t", "x"))
 
 # begin
@@ -259,39 +200,31 @@ end
 
 @info("Load model");
 model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
-model = Flux.Chain(
-    Flux.Dense(m => 40, tanh; init = Models.glorot_uniform_float64, bias = true),
-    Flux.Dense(40 => 40, tanh; init = Models.glorot_uniform_float64, bias = true),
-    Flux.Dense(40 => m, identity; init = Models.glorot_uniform_float64, bias = true),
-);
-
-
 p₀, re = Flux.destructure(model);
 fᵣₒₘ(v, p, t) = re(p)(v);
-f_closure = (v, p, t) -> f_godunov(v, (ν, Δx2), t) + re(p)(u);
 
-loss_df(p, _) = loss_derivative_fit_cnn(
-    f_closure, # fᵣₒₘ
-    p,
-    reshape(invi_dvdt_train, xₙ, :),
-    reshape(invi_v_train, xₙ, :);
-    nsample = 64,
-);
+# loss_df(p, _) = loss_derivative_fit_cnn(
+#     fᵣₒₘ,
+#     p,
+#     reshape(invi_dvdt_train, xₙ, :),
+#     reshape(invi_v_train, xₙ, :);
+#     nsample = 64,
+# );
 
-p_df = train(
-    loss_df,
-    p₀;
-    maxiters = 10 * (192 / 64), # * (192 / 16)
-    optimizer = OptimizationOptimisers.Adam(lr),
-    callback = create_callback_cnn(
-        f_closure,
-        invi_v_valid,
-        vt_valid;
-        ncallback = (192 / 64),
-        reltol = 1e-6,
-        abstol = 1e-6,
-    ),
-);
+# p_df = train(
+#     loss_df,
+#     p₀;
+#     maxiters = 100 * (192 / 64), # * (192 / 16)
+#     optimizer = OptimizationOptimisers.Adam(lr),
+#     callback = create_callback_cnn(
+#         fᵣₒₘ,
+#         invi_v_valid,
+#         vt_valid;
+#         ncallback = (192 / 64),
+#         reltol = 1e-6,
+#         abstol = 1e-6,
+#     ),
+# );
 
 loss_tf(p, _) = loss_trajectory_fit_cnn(
     fᵣₒₘ,

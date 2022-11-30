@@ -37,7 +37,7 @@ function show_state(u, x, y, title, xlabel, ylabel)
     - `xlabel::String`: x axis label
     - `ylabel::String`: y axis label
     """
-    pyplot();
+    # pyplot();
 
     xₙ, yₙ = size(x)[1], size(y)[1];
     xₘᵢₙ, xₘₐₓ = x[1], x[end];
@@ -77,7 +77,7 @@ function show_err(u, û, x, y, title, xlabel, ylabel; diff = (u, û) -> abs.(u
     - `x::String`: x label
     - `y::String`: y label
     """
-    pyplot();
+    # pyplot();
     xₙ, yₙ = size(x)[1], size(y)[1];
     xₘᵢₙ, xₘₐₓ = x[1], x[end];
     yₘᵢₙ, yₘₐₓ = y[1], y[end];

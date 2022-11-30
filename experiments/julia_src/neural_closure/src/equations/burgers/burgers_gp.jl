@@ -3,6 +3,19 @@ using OrdinaryDiffEq
 
 include("../solvers.jl");
 
+"""
+    tensormul(A, x)
+
+Multiply `A` of size `(ny, nx)` with each column of tensor `x` of size `(nx, d1, ..., dn)`.
+Return `y = A * x` of size `(ny, d1, ..., dn)`.
+"""
+function tensormul(A, x)
+    s = size(x)
+    x = reshape(x, s[1], :)
+    y = A * x
+    reshape(y, size(y, 1), s[2:end]...)
+end
+
 
 """
   galerkin_projection(t, S, Φ, ν, dx, dt)
@@ -95,24 +108,105 @@ function galerkin_projection(t, S, Φ, ν, dx, dt)
   return ū .+ Φ * A, A;
 end
 
+"""
+  offline_op(ū, Φ, ν, Δx)
 
-  # function f(dudt, u, p, t)
-  #   B_k = p[1];
-  #   L_k = p[2];
-  #   N_k = p[3];
-  #
-  #   dudt = B_k;
-  #   dudt += L_k * u;
-  #
-  #   for k in r
-  #     dudt[k] = dudt[k] + (N_k[k, :, :] * u)' * u;
-  #   end
-  #
-  #   return dudt
-  # end
+  Compute offline operator used by Galerkin projection for non-conservative Burgers equation
+    Use finite-difference for offline operator. Losing precision (to replace).
+  # Arguments
+  - `ū::Vector<Float>` time averaged of solution snapshot
+  - `Φ::Vector<Float>`: pod modes
+  - `ν::Float`: viscosity
+  - `Δx::Float`: x-axis discretization
+"""
+function offline_op(ū, Φ, ν, Δx)
+  n_modes = size(Φ)[2];
 
-  # A2 = zeros(size(a)[1], size(t)[1])
-  # tspan = (t[1], t[end])
-  # prob = ODEProblem(ODEFunction(f), copy(a), tspan, (B_k, L_k, N_k))
-  # sol = solve(prob, Tsit5(), saveat=t, reltol=1e-9, abstol=1e-9) 
-  # A2 = hcat(sol.u)
+  function L(u) # Finite difference not accurate
+    """ Linear operator """
+    u₊ = circshift(u, -1);
+    u₋ = circshift(u, +1);
+    return (u₊ - 2 * u + u₋) ./ (Δx^2);
+  end
+
+  function N(u, v)  # Finite difference not accurate
+    """ Non-linear operator """
+    v₊ = circshift(v, -1);
+    v₋ = circshift(v, +1);
+
+    vₓ =  - (v₊ - v₋) ./ (2. * Δx);
+    return u .* vₓ
+  end
+
+  # Compute offline operators
+  Lū = ν * L(ū);
+  Nū = N(ū, ū);
+
+  r = n_modes;
+  B_k = zeros(r);
+  L_k = zeros(r, r);
+  N_k = zeros(r, r, r);
+
+  B_k = ((Lū + Nū)' * Φ)[1, :];
+  L_k = ((ν * L(Φ) + N(ū, Φ) + N(Φ, ū))' * Φ)';
+
+  for k in range(1, n_modes, step=1)
+    for i in range(1, n_modes, step=1)
+      cst = N(Φ[:, i], Φ);
+      N_k[k, i, :] .= sum(cst' * Φ[:, k]; dims=2);
+    end
+  end
+
+  return B_k, L_k, N_k
+end
+
+
+"""
+  gp(a, (B_k, L_k, N_k), t)
+
+  POD-GP for non-conservative Burgers equation
+
+  # Arguments
+  - `a::Vector<Float>` a(t)
+  - `(B_k, L_k, N_k)` : offline operators
+  - `t::Vector<Float>` t-axis values
+"""
+function gp(a, (B_k, L_k, N_k), t)
+  aₜ = zeros(size(a));
+  aₜ .+= B_k;
+  aₜ .+= L_k * a;
+  for k in size(N_k, 1)
+    cst = ((N_k[k, :, :] * a)' * a)[1, 1];
+    aₜ[k, 1] = aₜ[k, 1] + cst;
+  end
+  return aₜ
+end
+
+
+
+"""
+  galerkin_projection_2(u₀, (ū, Φ, ν, Δx), t)
+
+  POD-GP for non-conservative Burgers equation
+  Equivalent (but faster) than:
+    gg(a, p, t) = Φ' * ff(Φ * a + ū_pod, p, t)
+    
+  # Arguments
+  - `u₀::Vector<Float>` :initial conditions
+  - `ū::Vector<Float>` time averaged of solution snapshot
+  - `Φ::Vector<Float>`: pod modes
+  - `ν::Float`: viscosity
+  - `Δx::Float`: x-axis discretization
+  - `t::Vector<Float>` t-axis values
+"""
+function galerkin_projection_2(u₀, (ū, Φ, ν, Δx), t)
+  # if ū != 0 then a = Φ'(u - ū)
+  # if  ū == 0 then a = Φ'u
+  a₀ = Φ' * (u₀ .- ū);
+  B_k, L_k, N_k = Equations.offline_op(ū, Φ, ν, Δx);
+  a_prob = ODEProblem(Equations.gp, a₀, extrema(t), (B_k, L_k, N_k), saveat=t);
+  A = Array(solve(a_prob, Tsit5(), sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
+  return ū .+ tensormul(Φ, A), A;
+end
+
+

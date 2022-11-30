@@ -7,6 +7,7 @@ struct Basis{T}
   modes::Matrix{T}
   coefficients::Matrix{T}
   eigenvalues::Vector{T}
+  # mean::Vector{T}
 end
 
 """
@@ -40,11 +41,11 @@ function generate_pod_basis(M, substract_mean::Bool = false)
   W = W[:, idx]
 
   D = sqrt.(abs.(λ));
-  θ = real.(S * W) * Diagonal(1 ./ D);
+  Φ = real.(S * W) * Diagonal(1 ./ D);
   # A = Diagonal(D) * W';
-  A = θ' * S;
+  A = Φ' * S;
 
-  return Basis(θ, A, abs.(λ)), sm
+  return Basis(Φ, A, abs.(λ)), reshape(sm, :)
 end
 
 """

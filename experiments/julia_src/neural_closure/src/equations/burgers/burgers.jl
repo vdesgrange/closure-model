@@ -15,6 +15,17 @@ function predict(f, u₀, p, t, solver; kwargs...)
     sol = solve(problem, solver; saveat=t, kwargs...)
 end
 
+function f_fft(u, (ν, Δx, k), t)
+  û = FFTW.fft(u)
+  ûₓ = 1im .* k .* û
+  ûₓₓ = (-k.^2) .* û
+
+  uₓ = FFTW.ifft(ûₓ)
+  uₓₓ = FFTW.ifft(ûₓₓ)
+  uₜ = -u .* uₓ + ν .* uₓₓ
+  return real.(uₜ)
+end
+
 function fflux(u, (ν, Δx), t)
   u₋ = circshift(u, 1)
   u₊ = circshift(u, -1)
@@ -48,28 +59,23 @@ function f_godunov(u, (ν, Δx), t)
   return uₜ
 end
 
-
 function get_burgers_fft(t, Δx, xₙ, ν, u₀)
   """
-  Pseudo-spectral method
+  Pseudo-spectral method.
   Solve non-conservative Burgers equation with pseudo-spectral method.
+  Convinient for viscous case (preferable to finite-difference)
   """
-  # k = 2 * pi * AbstractFFTs.fftfreq(xₙ, 1. / Δx) # Sampling rate, inverse of sample spacing
+  k = 2 * pi * AbstractFFTs.fftfreq(xₙ, 1. / Δx) # Sampling rate, inverse of sample spacing
+  sol = predict(f_fft, copy(u₀), (ν, Δx, k), t, Tsit5(); reltol=1e-6, abstol=1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()))
 
-  # function f(u, p, t)
-  #   k = p[1]
-  #   ν = p[2]
+  return sol.t, Array(sol)
+end
 
-  #   û = FFTW.fft(u)
-  #   ûₓ = 1im .* k .* û
-  #   ûₓₓ = (-k.^2) .* û
-
-  #   uₓ = FFTW.ifft(ûₓ)
-  #   uₓₓ = FFTW.ifft(ûₓₓ)
-  #   uₜ = -u .* uₓ + ν .* uₓₓ
-  #   return real.(uₜ)
-  # end
-
+function get_burgers_flux(t, Δx, xₙ, ν, u₀)
+  """
+  Flux method
+  Solve non-conservative Burgers equation with numerical flux method (Jameson). Convenient for viscous case.
+  """
   sol = predict(fflux, copy(u₀), (ν, Δx), t, Tsit5(); reltol=1e-6, abstol=1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()))
 
   return sol.t, Array(sol)
@@ -112,7 +118,7 @@ function get_burgers_godunov(t, Δx, xₙ, ν, u₀)
   """
     get_burgers_godunov(t, Δx, xₙ, ν, u₀)
 
-  Godunov method
+  Godunov method. Convinient for inviscid case.
   "A Difference Method for the Numerical Calculation of Discontinous Solutions of Hydrodynamic Equations"
   """
   # tspan = (t[1], t[end])
