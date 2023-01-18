@@ -105,6 +105,8 @@ dataset = Generator.read_dataset("./dataset/viscous_burgers_high_dim_t2_64_xpi_6
 using BSON
 BSON.@load "./models/cnn_viscous_256_2/viscous_burgers_high_dim_m10_256_500epoch_model2_j173.bson" K p
 t, u₀, u = Generator.get_burgers_batch(4 * tₘₐₓ, tₘᵢₙ, 4 * xₘₐₓ, xₘᵢₙ, 4 * tₙ, 4 * xₙ, ν, 2, (; m=10));
+_prob = ODEProblem((u, p, t) -> K(u), reshape(u₀, :, 1, 1), extrema(t), p; saveat=t);
+û = Array(solve(_prob, Tsit5(), reltol=1e-6, abstol=1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP())));
 
 function test1()
   _ref = ODEProblem(f, u₀, extrema(t), (ν, Δx); saveat=t);

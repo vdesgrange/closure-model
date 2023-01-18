@@ -69,6 +69,16 @@ function downsampling(u, d)
     return u₃
 end
 
+function downsampling(u, dₓ, dₜ)
+    (Nₓ, b, Nₜ) = size(u);
+    Dₜ = Int64(Nₜ / dₜ);
+    u₁ = u[:, :, 1:dₜ:end]; # Take t value every dₜ steps
+    Dₓ = Int64(Nₓ / dₓ);
+    u₂ = sum(reshape(u₁, dₓ, Dₓ, b, Dₜ), dims=1);
+    u₃ = reshape(u₂, Dₓ, b, Dₜ) ./ dₓ;
+    return u₃
+end
+
 epochs = 100;
 ratio = 0.75;
 batch_size = 64; # High for derivative fitting (i.e. 64)
@@ -86,12 +96,13 @@ K = 100;  # Maximum frequency in initial conditions# Sampling rate, inverse of s
 sol = Tsit5();
 
 # FOM discretization
-up = 16;
-x = LinRange(xₘᵢₙ, xₘₐₓ, up * xₙ);
-Δx = (xₘₐₓ - xₘᵢₙ) / (up * xₙ - 1);
-k = 2 * pi * AbstractFFTs.fftfreq(up * xₙ, 1. / Δx);
+upₓ = 1;
+x = LinRange(xₘᵢₙ, xₘₐₓ, upₓ * xₙ);
+Δx = (xₘₐₓ - xₘᵢₙ) / (upₓ * xₙ - 1);
+k = 2 * pi * AbstractFFTs.fftfreq(upₓ * xₙ, 1. / Δx);
 
 # Training times
+up = 16;
 t_pod = LinRange(0.0, 2., Int(up * tₙ));
 t_train = LinRange(0.0, 2., Int(up * tₙ));
 t_valid = LinRange(0.0, 4., Int(up * tₙ));
@@ -100,8 +111,8 @@ t_test = LinRange(0.0, tₘₐₓ, Int(up * tₙ));
 # === Generate data ===
 # u_pod = analytical_solution(x, Array(t_pod)')
 
-# ff = Equations.f_fft;
-# pᵣ =  (ν, Δx, k);
+ff = fflux2;
+pᵣ =  (ν, Δx, k);
 # u_pod = create_data_maulik(ff, pᵣ, K, x, 1, t_pod; reltol = 1e-6, abstol = 1e-6);
 # u_train = create_data_maulik(ff, pᵣ, K, x, 1, t_train; reltol = 1e-6, abstol = 1e-6);
 # u_valid  = create_data_maulik(ff, pᵣ, K, x, 1, t_valid; reltol = 1e-6, abstol = 1e-6);
@@ -112,13 +123,10 @@ u_train  = create_data_maulik_analytique(x, t_train);
 u_valid  = create_data_maulik_analytique(x, t_valid);
 u_test   = create_data_maulik_analytique(x, t_test);
 
-
-
 # ū_pod = mean(u_pod, dims=3)[:, 1]; # 2, or 3 if batch
 # ū_train = mean(u_train, dims=3)[:, 1];
 # ū_valid = mean(u_valid, dims=3)[:, 1];
 # ū_test = mean(u_test, dims=3)[:, 1];
-
 
 # Time derivatives
 dudt_pod = ff(u_pod, pᵣ, 0);
@@ -134,10 +142,10 @@ vt_train = Array(t_train)[1:up:end];
 vt_valid = Array(t_valid)[1:up:end];
 vt_test = Array(t_test)[1:up:end];
 
-v_pod = downsampling(u_pod, up);
-v_train = downsampling(u_train, up);
-v_valid = downsampling(u_valid, up);
-v_test  = downsampling(u_test, up);
+v_pod = downsampling(u_pod, 1, up);
+v_train = downsampling(u_train, 1, up);
+v_valid = downsampling(u_valid, 1, up);
+v_test  = downsampling(u_test, 1, up);
 
 p2 =  (ν, Δx2, k2);
 dvdt_pod = ff(v_pod, p2, 0);
@@ -155,56 +163,49 @@ dvdt_test = ff(v_test, p2, 0);
 # Gupta 2021 : POD.generate_pod_svd_basis(u, false); fflux2 + (T=2 or 4) + svd + substract mean
 # bas, _ = POD.generate_pod_svd_basis(u_pod[:, 1, :], true); # gupta
 # @show POD.get_energy(bas.eigenvalues.^2, m);
-m = 3;  # Number of POD modes
-bas, sm = POD.generate_pod_basis(u_pod[:, 1, :], true); # maulik
+m = 10;  # Number of POD modes
+bas, sm = POD.generate_pod_basis(v_pod[:, 1, :], true); # maulik
+λ = bas.eigenvalues;
 @show POD.get_energy(bas.eigenvalues, m);
 Φ = bas.modes[:, 1:m];
 u₀ = u_pod[:, 1, 1];
 v₀ = v_pod[:, 1, 1];
 
-## GP 1, f = finite diff (No)
-# B_k, L_k, N_k = offline_op(sm, Φ, ν, Δx);
-# @time begin
-#     a₀_pod = Φ' * (v₀ .- sm);
-#     A = predict(Equations.gp,  a₀_pod, (B_k, L_k, N_k), vt_pod, Tsit5());
-# end;
-
-## GP 2, f = fft
-gg(a, p, t) = Φ' * ff(Φ * a + sm, p, t);
-@time begin
-    a₀_pod = Φ' * (u₀ .- sm);
-    A = predict(gg,  a₀_pod, (ν, Δx, k), t_pod, Tsit5());
-end;
-
-# display(GraphicTools.show_state(sm .+ Φ * A, t_pod, x, "", "t", "x"))
-
+size(Φ)
+size(v_pod)
 begin
-    plt = plot(title="Coefficients", xlabel="t", ylabel="ϕ", background_color_legend = RGBA(1, 1, 1, 0.8))
-    plot!(plt; dpi=600)
-    plot!(plt, t_pod, bas.coefficients[1, :], c=:coral, label=L"a_1")
-    plot!(plt, t_pod, bas.coefficients[2, :], c=:green, label=L"a_2")
-    plot!(plt, t_pod, bas.coefficients[3, :], c=:blue, label=L"a_3")
-
-    # plot!(plt, vt_pod, A[1, :], c=:coral, linestyle=:dash,label=L"gp_1")
-    # plot!(plt, vt_pod, A[2, :], c=:green, linestyle=:dash,label=L"gp_2")
-    # plot!(plt, vt_pod, A[3, :], c=:blue, linestyle=:dash,label=L"gp_3")
-
-    # plot!(plt, t_train, bas.coefficients[1, :], c=:coral, label=L"a_1")
-    # plot!(plt, t_train, bas.coefficients[2, :], c=:green, label=L"a_2")
-    # plot!(plt, t_train, bas.coefficients[3, :], c=:blue, label=L"a_3")
-    plot!(plt, t_pod, a_pod[1, 1, :], c=:coral, linestyle=:dot,label=L"1")
-    plot!(plt, t_pod, a_pod[2, 1, :], c=:green, linestyle=:dot,label=L"2")
-    plot!(plt, t_pod, a_pod[3, 1, :], c=:blue, linestyle=:dot,label=L"3")
-
-    plot!(plt, t_pod, A[1, :], c=:coral, linestyle=:dash,label=L"gp2_1")
-    plot!(plt, t_pod, A[2, :], c=:green, linestyle=:dash,label=L"gp2_2")
-    plot!(plt, t_pod, A[3, :], c=:blue, linestyle=:dash,label=L"gp2_3")
+    plt = plot(title="POD bases", xlabel="x", ylabel=L"Φ_i", background_color_legend = RGBA(1, 1, 1, 0.8))
+    plot!(plt, x, Φ[:, 1], c=:coral, label=L"Φ_1")
+    plot!(plt, x, Φ[:, 2], c=:green, label=L"Φ_2")
+    plot!(plt, x, Φ[:, 3], c=:blue, label=L"Φ_3")
+    savefig("maulik_3_modes_substracted_mean.png")
 end
 
-# a_pod = tensormul(Φ', u_pod); # v_pod = Φ' * u_pod ### A = Φ' * (u_pod .- mean(u_pod, dims=2));
-# a_train = tensormul(Φ', u_train);
-# a_valid = tensormul(Φ', u_valid);
-# a_test = tensormul(Φ', u_test);
+
+display(GraphicTools.show_state(Φ * A, vt_pod, x, "", "t", "x"))
+
+## GP 1, f = finite diff (No)
+B_k, L_k, N_k = Equations.offline_op(sm, Φ, ν, Δx);
+begin
+    a₀_pod = Φ' * (u₀ .- sm);
+    A = predict(Equations.gp,  a₀_pod, (B_k, L_k, N_k), t_pod, Tsit5());
+end;
+
+## GP 2, f = fft
+ff = Equations.f_fft;
+gg(a, p, t) = Φ' * ff(Φ * a , p, t); # + sm
+@time begin
+    a₀_pod = Φ' * (u₀);  # .- sm 
+    A = predict(gg,  a₀_pod, (ν, Δx, k), t_pod, Tsit5());
+end;
+a₀_pod = Φ' * (v₀);  # .- sm 
+A = predict(gg,  a₀_pod, (ν, Δx, k), vt_pod, Tsit5());
+# display(GraphicTools.show_state(sm .+ Φ * A, t_pod, x, "", "t", "x"))
+size(A)
+a_pod = tensormul(Φ', u_pod); # v_pod = Φ' * u_pod ### A = Φ' * (u_pod .- mean(u_pod, dims=2));
+a_train = tensormul(Φ', u_train);
+a_valid = tensormul(Φ', u_valid);
+a_test = tensormul(Φ', u_test);
 
 a_pod = tensormul(Φ', u_pod .- sm); # v_pod = Φ' * u_pod ### A = Φ' * (u_pod .- mean(u_pod, dims=2));
 a_train = tensormul(Φ', u_train .- sm);
@@ -217,9 +218,32 @@ dadt_train = tensormul(Φ', dudt_train);
 dadt_valid = tensormul(Φ', dudt_valid);
 dadt_test = tensormul(Φ', dudt_test);
 
+begin
+    plt = plot(title="Coefficients", xlabel="t", ylabel="ϕ", background_color_legend = RGBA(1, 1, 1, 0.8))
+    plot!(plt; dpi=600)
+    plot!(plt, t_pod, bas.coefficients[1, :], c=:coral, label=L"a_1") # True coefficient a1 = Φ'û
+    plot!(plt, t_pod, bas.coefficients[2, :], c=:green, label=L"a_2") # True coefficient a2 = Φ'û
+    plot!(plt, t_pod, bas.coefficients[3, :], c=:blue, label=L"a_3") # True coefficient a3 = Φ'û
+
+    plot!(plt, t_pod, A[1, :], c=:coral, linestyle=:dash,label=L"GP_1")
+    plot!(plt, t_pod, A[2, :], c=:green, linestyle=:dash,label=L"GP_2")
+    plot!(plt, t_pod, A[3, :], c=:blue, linestyle=:dash,label=L"GP_3")
+
+    # plot!(plt, t_pod, a_pod[1, 1, :], c=:red, label=L"aᵣ_1") # Reduce coefficient a1 = Φᵣ'û (mean value is substracted !)
+    # plot!(plt, t_pod, a_pod[2, 1, :], c=:red,  label=L"aᵣ_2") # Reduce coefficient a2 = Φᵣ'û
+    # plot!(plt, t_pod, a_pod[3, 1, :], c=:red, label=L"aᵣ_3") # Reduce coefficient a3 = Φᵣ'û
+
+        # plot!(plt, t_valid, bas.coefficients[1, :], c=:coral, label=L"a_1") # True coefficient a1 = Φ'û
+    # plot!(plt, t_valid, -bas.coefficients[2, :], c=:green, label=L"a_2") # True coefficient a2 = Φ'û
+    # plot!(plt, t_valid, -bas.coefficients[3, :], c=:blue, label=L"a_3") # True coefficient a3 = Φ'û
+
+    # plot!(plt, t_valid, A[1, :], c=:coral, linestyle=:dash,label=L"GP_1")
+    # plot!(plt, t_valid, -A[2, :], c=:green, linestyle=:dash,label=L"GP_2")
+    # plot!(plt, t_valid, -A[3, :], c=:blue, linestyle=:dash,label=L"GP_3")
+end
+
 # display(GraphicTools.show_state(v_train[:, 1, :], vt_train, x, "", "t", "x"))
 # display(GraphicTools.show_state(sm .+ Φ * a_train[:, 1, :], vt_train, x, "", "t", "x"))
-
 
 # === Maulik paper batching : batch per time ===
 
@@ -265,17 +289,19 @@ end
 
 # ==== Model ====
 model = Flux.Chain(
-    v -> vcat(v, v .^ 2),
-    Flux.Dense(2m => 40, tanh; init = Models.glorot_uniform_float64, bias = true),
+    # v -> vcat(v, v .^ 2),
+    Flux.Dense(m => 40, tanh; init = Models.glorot_uniform_float64, bias = true),
+    # Flux.Dense(40 => 40, tanh; init = Models.glorot_uniform_float64, bias = true),
     Flux.Dense(40 => m, identity; init = Models.glorot_uniform_float64, bias = true),
 );
 # model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
+ff = fflux2;
 p₀, re = Flux.destructure(model);
 fᵣₒₘ(v, p, t) = re(p)(v);
-f_closure(v, p, t) = Φ' * fflux2(Φ * v, (ν, Δx, k), t) + re(p)(v);
+f_closure(v, p, t) = Φ' * ff(Φ * v, (ν, Δx, k), t) + re(p)(v);
 
 loss_df(p, _) = loss_derivative_fit(
-    fᵣₒₘ, # fᵣₒₘ,
+    fᵣₒₘ, # f_closure
     p,
     reshape(dadt_train, m, :),
     reshape(a_train, m, :);
@@ -285,7 +311,7 @@ loss_df(p, _) = loss_derivative_fit(
 p_df = train(
     loss_df,
     p₀;
-    maxiters = 5000,
+    maxiters = 10000,
     optimizer = OptimizationOptimisers.Adam(lr),
     callback = create_callback(
         fᵣₒₘ,
@@ -297,9 +323,8 @@ p_df = train(
     ),
 );
 
-
 loss_tf(p, _) = loss_time_trajectory_fit( # loss_time_trajectory_fit
-    f_closure, # fᵣₒₘ
+    fᵣₒₘ, # fᵣₒₘ
     p,
     a_train,
     t_train;
@@ -309,31 +334,44 @@ loss_tf(p, _) = loss_time_trajectory_fit( # loss_time_trajectory_fit
     abstol = 1e-6,
 );
 
-p_tf = train(
-    loss_tf,
-    p₀;
-    maxiters = 3000,
-    optimizer = OptimizationOptimisers.Adam(lr),
-    callback = create_callback(
-        f_closure,
-        a_valid,
-        t_valid;
-        ncallback = 8,
-        reltol = 1e-4,
-        abstol = 1e-6,
-    ),
-);
 
-# === Results === 
-sol_df = predict(
+include("closure_training.jl");
+pure_rel_err_per_epochs = zeros(Int(2000 / 8));
+pure_mse_per_epochs = zeros(Int(2000 / 8));
+
+callback = create_callback(
     fᵣₒₘ,
-    a_test[:, :, 1],
-    p_df,
-    t_train,
-    Tsit5();
-    reltol = 1e-6,
+    a_valid,
+    t_valid;
+    ncallback = 8,
+    reltol = 1e-4,
     abstol = 1e-6,
 );
+
+p_tf, cb = train(
+    loss_tf,
+    p₀;
+    maxiters = 2000,
+    optimizer = OptimizationOptimisers.Adam(lr),
+    callback = callback,
+);
+
+pure_rel_err_per_epochs = cat(pure_rel_err_per_epochs, cb.errors; dims=2)
+pure_mse_per_epochs = cat(pure_mse_per_epochs, cb.mses; dims=2)
+# JLD2.save("./results/maulik_time_tf_errors_per_epoch_250ep_8b_rel_mean_substracted.jld2", "relative_error", pure_rel_err_per_epochs[:, 2:end]);
+# JLD2.save("./results/maulik_time_tf_errors_per_epoch_250ep_8b_mse_mean_substracted.jld2", "mse", pure_mse_per_epochs[:, 2:end]);
+
+
+# === Results === 
+# sol_df = predict(
+#     fᵣₒₘ,
+#     a_test[:, :, 1],
+#     p_df,
+#     t_train,
+#     Tsit5();
+#     reltol = 1e-6,
+#     abstol = 1e-6,
+# );
 
 sol_tf₀ = predict(
     fᵣₒₘ,
@@ -345,11 +383,9 @@ sol_tf₀ = predict(
     abstol = 1e-6,
 );
 
-
-
 sol_tf = predict(
     fᵣₒₘ,
-    a_test[:, :, 1],
+    a_train[:, :, 1],
     p_tf,
     t_train,
     Tsit5();
@@ -357,20 +393,33 @@ sol_tf = predict(
     abstol = 1e-6,
 );
 
+bas2, sm2 = POD.generate_pod_basis(u_valid[:, 1, :], true); # maulik
+λ2 = bas2.eigenvalues;
+@show POD.get_energy(bas2.eigenvalues, m);
+Φ2 = bas2.modes[:, 1:m];
+
 iplot = 1;
 begin
-    plt = plot(title="Coefficients", xlabel="t", ylabel="a", background_color_legend = RGBA(1, 1, 1, 0.8))
+    plt = plot(title="POD-space coefficients", xlabel="t", ylabel=L"a_i", background_color_legend = RGBA(1, 1, 1, 0.8))
     plot!(plt; dpi=600)
     
     # Reference
     plot!(plt, t_pod, bas.coefficients[1, :], c=:coral, label=L"a_1")
     plot!(plt, t_pod, bas.coefficients[2, :], c=:green, label=L"a_2")
     plot!(plt, t_pod, bas.coefficients[3, :], c=:blue, label=L"a_3")
+    # plot!(plt, t_valid, a_valid[1, 1, :], c=:coral, label=L"a_1")
+    # plot!(plt, t_valid, a_valid[2, 1, :], c=:green, label=L"a_2")
+    # plot!(plt, t_valid, a_valid[3, 1, :], c=:blue, label=L"a_3")
+
 
     # Baseline
-    # plot!(plt, t_train, A[1, :], c=:coral, linestyle=:dash,label=L"gp_1")
-    # plot!(plt, t_train, A[2, :], c=:green, linestyle=:dash,label=L"gp_2")
-    # plot!(plt, t_train, A[3, :], c=:blue, linestyle=:dash,label=L"gp_3")
+    plot!(plt, t_pod, A[1, :], c=:coral, linestyle=:dash,label=L"GP_1")
+    plot!(plt, t_pod, A[2, :], c=:green, linestyle=:dash,label=L"GP_2")
+    plot!(plt, t_pod, A[3, :], c=:blue, linestyle=:dash,label=L"GP_3")
+
+    # plot!(plt, t_valid, A[1, :], c=:coral, linestyle=:dash,label=L"GP_1")
+    # plot!(plt, t_valid, A[2, :], c=:green, linestyle=:dash,label=L"GP_2")
+    # plot!(plt, t_valid, A[3, :], c=:blue, linestyle=:dash,label=L"GP_3")
 
     # NODE (DF)
     # plot!(plt, t_train, sol_df[1, 1, :], c=:coral, linestyle=:dot,label=L"NODE_1\ (DF)")
@@ -382,9 +431,9 @@ begin
     plot!(plt, t_train, sol_tf[2, 1, :], c=:green, linestyle=:dot,label=L"NODE_2")
     plot!(plt, t_train, sol_tf[3, 1, :], c=:blue, linestyle=:dot,label=L"NODE_3")
 
-    # plot!(plt, t_train, sol_tf[1, 1, :] .- Φ[:, 1]' * sm, c=:coral, linestyle=:dash,label=L"NODE_1")
-    # plot!(plt, t_train, sol_tf[2, 1, :] .- Φ[:, 2]' * sm, c=:green, linestyle=:dash,label=L"NODE_2")
-    # plot!(plt, t_train, sol_tf[3, 1, :] .- Φ[:, 3]' * sm, c=:blue, linestyle=:dash,label=L"NODE_3")
+    # plot!(plt, t_valid, sol_tf[1, 1, :], c=:coral, linestyle=:dot,label=L"NODE_1")
+    # plot!(plt, t_valid, sol_tf[2, 1, :], c=:green, linestyle=:dot,label=L"NODE_2")
+    # plot!(plt, t_valid, sol_tf[3, 1, :], c=:blue, linestyle=:dot,label=L"NODE_3")
 
     # plot!(plt, t_train, a_train[1, 1, :], c=:red, linestyle=:dot,label=L"NODE_1")
     # plot!(plt, t_train, a_train[2, 1, :], c=:red, linestyle=:dot,label=L"NODE_2")
@@ -393,38 +442,44 @@ begin
     # plot!(plt, t_train, sol_tf₀[1, 1, :], c=:coral, linestyle=:dot,label=L"NODE_1 Initial")
     # plot!(plt, t_train, sol_tf₀[2, 1, :], c=:green, linestyle=:dot,label=L"NODE_2 Initial")
     # plot!(plt, t_train, sol_tf₀[3, 1, :], c=:blue, linestyle=:dot,label=L"NODE_3 Initial")
-
+    savefig("ref_baseline_node_coefficients_without_mean_substracted_1_layers_tr4_te4.png")
 end
 
-plot()
-plot!(x, Φ[:, 1])
-plot!(x, Φ[:, 2])
-plot!(x, Φ[:, 3])
+begin
+    iplot = 1
+    for (i, t) ∈ collect(enumerate(t_test))[1:4:end]
+        pl = Plots.plot(;title = @sprintf("Projected field, t = %.3f", t), xlabel = "x", ylabel="u", legend=:topleft)
+        plot!(pl, x, Φ * Φ' * (u_test[:, iplot, i] .- sm); label = "FOM POD")
+        # plot!(pl, x, Φ * a_train[:, iplot, i]; label = "FOM") # not ROM GP?
+        plot!(pl, x, Φ * A[:, i]; label = "ROM GP")
+        plot!(pl, x, Φ * sol_tf[:, iplot, i]; label = "ROM NODE (TF)")
+        # plot!(pl, x, Φ * sol_tf[:, iplot, i] .+ sm; label = "ROM NODE (TF)")
+        display(pl)
+        sleep(0.05)
+    end
+end
+
+t_train[256]
+
+begin
+    pl = Plots.plot(;title = @sprintf("Projected field, t = %.1f", t_train[512]), xlabel = "x", ylabel="u", legend=:topleft)
+    plot!(pl, x, Φ * Φ' * (u_train[:, 1, 512]); label = "FOM POD")
+    plot!(pl, x, Φ * A[:, 512]; label = "ROM GP")
+    plot!(pl, x, Φ * sol_tf[:, 1, 512]; label = "ROM NODE (TF)")
+    savefig("field_reconstruction_without_mean_substracted_1_layers_40_neurons_t1.png")
+end
+
+
 
 iplot = 1
 for (i, t) ∈ collect(enumerate(t_test))[1:8:end]
     pl = Plots.plot(;title = @sprintf("Projected field, t = %.3f", t), xlabel = "x")
     plot!(pl, x, u_test[:, iplot, i]; label = "FOM")
-    plot!(pl, x, Φ * a_test[:, iplot, i] .+ sm; label = "B")
-    # plot!(pl, x, Φ * A[:, i] .+ sm; label = "ROM GP")
-    # plot!(pl, x, Φ * sol_tf[:, iplot, i] .+ sm; label = "ROM NODE (TF)")
-    # plot!(pl, x, Φ * sol_tf[:, iplot, i] .+ sm; label = "ROM NODE (TF)")
     display(pl)
     sleep(0.05)
-end
-
-iplot = 1
-for (i, t) ∈ enumerate(t_test)
-    pl = Plots.plot(;title = @sprintf("Projected field, t = %.3f", t), xlabel = "x")
-    plot!(pl, x, u_test[:, iplot, i]; label = "FOM")
-    display(pl)
-    sleep(0.02)
 end
 
 
 pl = Plots.plot(;title = "Projection", xlabel = "x", ylims = extrema(v_train[1, iplot, :]))
 plot!(pl, t_train, v_train[1, iplot, :]; label = "Projected FOM")
 plot!(pl, t_train, sol_tf[1, iplot, :]; label = "ROM neural closure (TF)")
-
-
-pl = Plots.

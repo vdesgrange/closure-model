@@ -120,6 +120,8 @@ end
   - `Δx::Float`: x-axis discretization
 """
 function offline_op(ū, Φ, ν, Δx)
+  xₙ = size(ū, 1);
+  k = 2 * pi * AbstractFFTs.fftfreq(xₙ, 1. / Δx);
   n_modes = size(Φ)[2];
 
   function L(u) # Finite difference not accurate
@@ -129,13 +131,26 @@ function offline_op(ū, Φ, ν, Δx)
     return (u₊ - 2 * u + u₋) ./ (Δx^2);
   end
 
+  function L_fft(u)
+    û = FFTW.fft(u)
+    ûₓₓ = (-k.^2) .* û
+    uₓₓ = FFTW.ifft(ûₓₓ)
+    return real.(uₓₓ)
+  end
+
   function N(u, v)  # Finite difference not accurate
     """ Non-linear operator """
     v₊ = circshift(v, -1);
     v₋ = circshift(v, +1);
-
     vₓ =  - (v₊ - v₋) ./ (2. * Δx);
     return u .* vₓ
+  end
+
+  function N_fft(u, v)
+    v̂ = FFTW.fft(v);
+    v̂ₓ = 1im .* k .* v̂;
+    vₓ = FFTW.ifft(v̂ₓ);
+    return real.(-u .* vₓ)
   end
 
   # Compute offline operators

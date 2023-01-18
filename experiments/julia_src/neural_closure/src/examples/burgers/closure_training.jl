@@ -28,7 +28,7 @@ include("../../rom/pod.jl");
 function get_Φ(u, m)
     bas, _ = POD.generate_pod_svd_basis(u, false);
     λ = bas.eigenvalues;
-    @show POD.get_energy(λ, m)
+    @show POD.get_energy(λ.^2, m)
     Φ = bas.modes[:, 1:m];
 end
 
@@ -75,8 +75,9 @@ function loss_trajectory_fit(
     sol = predict(f, v[:, :, 1], p, t, solver; kwargs...)
 
     # Relative squared error
-    data = sum(abs2, sol - v) / sum(abs2, v)
-
+    # data = sum(abs2, sol - v) / sum(abs2, v)
+    data = mean((sol .- v) .^ 2);
+    
     # Regularization term
     reg = sum(abs2, p) / length(p)
 
@@ -110,32 +111,39 @@ function loss_derivative_fit(f, p, dvdt, v; λ = 1e-8, nsample = size(v, 2))
 end
 
 function relative_error(f, p, v, t, solver; kwargs...)
-    # Predicted soluton
+    # Predicted solution
     sol = predict(f, v[:, :, 1], p, t, solver; kwargs...)
 
     # Relative error
-    norm(sol - v) / norm(v)
+    e = norm(sol - v) / norm(v);
+
+    # Mean Square Error
+    mse = mean((sol .- v) .^ 2);
+
+    return e, mse
 end
 
 function train(loss, p₀; maxiters = 100, optimizer = OptimizationOptimisers.Adam(0.001), callback = p -> false)
     @info("Initiate training")
     optf = OptimizationFunction(loss, Optimization.AutoZygote())
     optprob = OptimizationProblem(optf, p₀, nothing)
-    sol = solve(optprob, optimizer; maxiters, callback)
-    sol.u
+    sol = solve(optprob, optimizer; maxiters, callback=callback)
+    sol.u, callback
 end
 
 function create_callback(f, v, t; ncallback = 1, solver = Tsit5(), kwargs...)
     i = 0
     iters = Int[]
     errors = zeros(0)
+    mses = zeros(0)
     function callback(p, loss)
         i += 1
         if i % ncallback == 0
-            e = relative_error(f, p, v, t, solver; kwargs...)
+            e, mse = relative_error(f, p, v, t, solver; kwargs...)
             push!(iters, i)
-            push!(errors, e)
-            println("Epoch $i\trelative error $e")
+            push!(errors, e);
+            push!(mses, mse);
+            println("Epoch $i\trelative error $(e)\t mean square error $(mse)")
             display(plot(iters, errors; xlabel = "Iterations", title = "Relative error"))
         end
         return false

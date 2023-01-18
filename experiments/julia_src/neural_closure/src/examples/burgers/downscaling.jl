@@ -4,7 +4,7 @@ using Statistics
 using LaTeXStrings
 using JLD2
 using BSON
-include("burgers_closure_galerkin_2.jl")
+include("closure_training.jl")
 include("../../equations/equations.jl");
 
 
@@ -49,7 +49,7 @@ function νm_flux(u, xt=0.)
     return r.^2 ./ 2.;
 end
 
-function f_godunov(u, (ν, Δx), t)
+function f_godunov2(u, (ν, Δx), t)
     ū = deepcopy(u);
     nf_u = νm_flux(ū, 0.);
     nf_u₋ = circshift(nf_u, 1);
@@ -114,18 +114,20 @@ K = 100;  # Maximum frequency in initial conditions
 # invi_u_valid  = create_data_fft(f_godunov, (ν, Δx), K, x, 64, t_valid; reltol = 1e-6, abstol = 1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
 # invi_u_test  = create_data_fft(f_godunov, (ν, Δx), K, x, 32, t_test; reltol = 1e-6, abstol = 1e-6, sensealg=DiffEqSensitivity.InterpolatingAdjoint(; autojacvec=ZygoteVJP()));
 
-# invi_v_train = downsampling(invi_u_train, up);
-# invi_v_valid = downsampling(invi_u_valid, up);
-# invi_v_test  = downsampling(invi_u_test, up);
 
 invi_v_train = JLD2.load("./dataset/inviscid/inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.jld2")["training_set"];
 invi_v_valid = JLD2.load("./dataset/inviscid/valid_inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.jld2")["validation_set"];
 invi_v_test = JLD2.load("./dataset/inviscid/test_inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.jld2")["test_set"];
 
+# invi_v_train = downsampling(invi_u_train, up);
+# invi_v_valid = downsampling(invi_u_valid, up);
+# invi_v_test  = downsampling(invi_u_test, up);
+size(invi_v_train)
+
 Δx2 = (xₘₐₓ - xₘᵢₙ) / (xₙ - 1);
-invi_dvdt_train = f_godunov(invi_v_train, (ν, Δx2), 0);
-invi_dvdt_valid = f_godunov(invi_v_valid, (ν, Δx2), 0);
-invi_dvdt_test = f_godunov(invi_v_test, (ν, Δx2), 0);
+invi_dvdt_train = f_godunov2(invi_v_train, (ν, Δx2), 0);
+invi_dvdt_valid = f_godunov2(invi_v_valid, (ν, Δx2), 0);
+invi_dvdt_test = f_godunov2(invi_v_test, (ν, Δx2), 0);
 
 
 # JLD2.save("./dataset/inviscid/inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.jld2", "training_set", invi_v_train);
@@ -260,18 +262,18 @@ end
 @info("Load model");
 model = Models.CNN2(9, [2, 4, 8, 8, 4, 2, 1]);
 model = Flux.Chain(
-    Flux.Dense(m => 40, tanh; init = Models.glorot_uniform_float64, bias = true),
+    Flux.Dense(xₙ => 40, tanh; init = Models.glorot_uniform_float64, bias = true),
     Flux.Dense(40 => 40, tanh; init = Models.glorot_uniform_float64, bias = true),
-    Flux.Dense(40 => m, identity; init = Models.glorot_uniform_float64, bias = true),
+    Flux.Dense(40 => xₙ, identity; init = Models.glorot_uniform_float64, bias = true),
 );
 
 
 p₀, re = Flux.destructure(model);
 fᵣₒₘ(v, p, t) = re(p)(v);
-f_closure = (v, p, t) -> f_godunov(v, (ν, Δx2), t) + re(p)(u);
+f_closure5 = (v, p, t) -> f_godunov2(v, (ν, Δx2), t) + re(p)(u);
 
-loss_df(p, _) = loss_derivative_fit_cnn(
-    f_closure, # fᵣₒₘ
+loss_df(p, _) = loss_derivative_fit(
+    f_closure5, # fᵣₒₘ
     p,
     reshape(invi_dvdt_train, xₙ, :),
     reshape(invi_v_train, xₙ, :);
@@ -281,10 +283,10 @@ loss_df(p, _) = loss_derivative_fit_cnn(
 p_df = train(
     loss_df,
     p₀;
-    maxiters = 10 * (192 / 64), # * (192 / 16)
+    maxiters = 100 * (192 / 64), # * (192 / 16)
     optimizer = OptimizationOptimisers.Adam(lr),
-    callback = create_callback_cnn(
-        f_closure,
+    callback = create_callback(
+        f_closure5,
         invi_v_valid,
         vt_valid;
         ncallback = (192 / 64),
@@ -323,36 +325,57 @@ p_tf = train(
 savefig("inviscid_loss_per_epoch.png")
 BSON.@save "./models/pure_node_inviscid/inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.bson" model p_tf
 
-# BSON.@load "./models/pure_node_inviscid/inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.bson" model p_tf
+BSON.@load "./models/pure_node_inviscid/inviscid_burgers_fouriers_t2_64_xpi_64_nu0_typ2_K100_256_up16_j173.bson" model p_tf
 
-# begin
-#     # sol_df = predict(
-#     #     fᵣₒₘ,
-#     #     reshape(v_test[:, :, 1], xₙ, 1, :),
-#     #     p_df,
-#     #     vt_test,
-#     #     Tsit5();
-#     #     reltol = 1e-6,
-#     #     abstol = 1e-6,
-#     # );
+sol_tf = predict(
+    fᵣₒₘ,
+    invi_v_test[:, :, 1],
+    p_tf,
+    vt_test,
+    Tsit5();
+    reltol = 1e-6,
+    abstol = 1e-6,
+);
 
-#     sol_tf = predict(
-#         fᵣₒₘ,
-#         invi_v_test[:, :, 1],
-#         p_tf,
-#         vt_test,
-#         Tsit5();
-#         reltol = 1e-6,
-#         abstol = 1e-6,
-#     );
+begin
+    # sol_df = predict(
+    #     fᵣₒₘ,
+    #     reshape(v_test[:, :, 1], xₙ, 1, :),
+    #     p_df,
+    #     vt_test,
+    #     Tsit5();
+    #     reltol = 1e-6,
+    #     abstol = 1e-6,
+    # );
 
-#     iplot = 1;
-#     for (i, t) ∈ enumerate(vt_test)
-#         pl = Plots.plot(;title = @sprintf("Solution, t = %.3f", t), xlabel = "x", ylims = extrema(invi_v_test[:, iplot, :]))
-#         plot!(pl, vx, invi_v_test[:, iplot, i]; label = "FOM")
-#         plot!(pl, vx, sol_tf[:, iplot, i]; label = "ROM neural closure (DF)")
-#             # plot!(pl, x, sol_tf[:, iplot, i]; label = "ROM neural closure (TF)")
-#         display(pl)
-#         sleep(0.05)
-#     end
-# end
+    iplot = 3;
+    for (i, t) ∈ collect(enumerate(vt_test))[1:4:end]
+        pl = Plots.plot(;title = @sprintf("t = %.2f", t), xlabel = "x", ylabel="u", ylims = extrema(invi_v_test[:, iplot, :]))
+        plot!(pl, vx, invi_v_test[:, iplot, i]; label = "FOM")
+        plot!(pl, vx, sol_tf[:, iplot, i]; label = "ROM neural closure (DF)")
+            # plot!(pl, x, sol_tf[:, iplot, i]; label = "ROM neural closure (TF)")
+        display(pl)
+        sleep(0.05)
+    end
+end
+savefig(GraphicTools.show_state(invi_v_test[:, 3, :], vt_train, vx, "Downscaled FOM model", "t", "x"), "downscaled_inviscid_burgers_2.png")
+savefig(GraphicTools.show_state(sol_tf[:, 3, :], vt_train, vx, "Pure NODE", "t", "x"), "pure_node_inviscid_burgers.png")
+savefig(GraphicTools.show_err(sol_tf[:, 3, :], invi_v_test[:, 3, :], vt_train, vx, "|Difference|", "t", "x"), "difference_inviscid_burgers.png")
+
+
+Plots.plot(;title = @sprintf("t = %.2f", vt_test[1]), xlabel = "x", ylabel="u", ylims = extrema(invi_v_test[:, iplot, :]))
+plot!(vx, invi_v_test[:, iplot, 1]; label = "FOM")
+plot!(vx, sol_tf[:, iplot, 1]; label = "ROM neural closure (DF)")
+savefig("comparison_inviscid_t0.png")
+
+Plots.plot(;title = @sprintf("t = %.2f", vt_test[17]), xlabel = "x", ylabel="u", ylims = extrema(invi_v_test[:, iplot, :]))
+plot!(vx, invi_v_test[:, iplot, 17]; label = "FOM")
+plot!(vx, sol_tf[:, iplot, 17]; label = "ROM neural closure (DF)")
+savefig("comparison_inviscid_t05.png")
+
+Plots.plot(;title = @sprintf("t = %.2f", vt_test[49]), xlabel = "x", ylabel="u", ylims = extrema(invi_v_test[:, iplot, :]))
+plot!(vx, invi_v_test[:, iplot, 49]; label = "FOM")
+plot!(vx, sol_tf[:, iplot, 49]; label = "ROM neural closure (DF)")
+savefig("comparison_inviscid_t15.png")
+
+size(invi_v_test)
